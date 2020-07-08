@@ -259,7 +259,13 @@ mod impls_generic_in_std {
     impl super::Write for AllowStd<&'_ mut [u8]> {
         fn write(&mut self, buf: &[u8]) -> Result<usize> {
             let len = self.0.len().min(buf.len());
+            #[cfg(not(feature = "compat"))]
             let (head, tail) = core::mem::take(&mut self.0).split_at_mut(len);
+            #[cfg(feature = "compat")]
+            let (head, tail) = {
+                let slice = core::mem::replace(&mut self.0, <&mut [_]>::default());
+                slice.split_at_mut(len)
+            };
             head.copy_from_slice(buf);
             self.0 = tail;
             Ok(len)
@@ -294,7 +300,9 @@ mod impls_only_in_alloc {
 #[cfg(feature = "std")]
 mod impls_on_std {
     use super::{AllowStd, Error, ErrorInner, Result};
-    use std::io::{self, IoSlice, IoSliceMut};
+    use std::io;
+    #[cfg(not(feature = "compat"))]
+    use std::io::{IoSlice, IoSliceMut};
 
     impl<R: io::Read> super::Read for AllowStd<R> {
         fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
@@ -306,6 +314,7 @@ mod impls_on_std {
         fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
             self.0.read(buf)
         }
+        #[cfg(not(feature = "compat"))] // Otherwise auto-derived.
         fn read_vectored(&mut self, bufs: &mut [IoSliceMut]) -> io::Result<usize> {
             self.0.read_vectored(bufs)
         }
@@ -333,6 +342,7 @@ mod impls_on_std {
         fn flush(&mut self) -> io::Result<()> {
             self.0.flush()
         }
+        #[cfg(not(feature = "compat"))] // Otherwise auto-derived.
         fn write_vectored(&mut self, bufs: &[IoSlice]) -> io::Result<usize> {
             self.0.write_vectored(bufs)
         }
