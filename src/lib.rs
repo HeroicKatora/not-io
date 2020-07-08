@@ -15,6 +15,17 @@
 //!   also since several types (e.g. `&[u8]`) implement those traits but would obviously be useful
 //!   as byte sources and sinks even when they are unavailable.
 //!
+//! However, this is a problem for streaming decoding or selecting parts from very large data
+//! structures. A crate that restricts itself to a strict `no_std` environment might accept its
+//! data as a single slice or a series of slice. But it has the major limitation that all of the
+//! data must be available in memory (or rather, in the address space if you utilize OS level
+//! support for paging via mmap) at once. The disadvantages can range anywhere from cache
+//! inefficiency, over uncontrolled latency spikes, to making the implementation actually
+//! impossible.
+//!
+//! The goal of this crate is to allow other decoder crates to forward this implementation option
+//! to the user.
+//!
 //! ## Usage guide
 //!
 //! This crate assumes you have a structure declared roughly as follows:
@@ -98,7 +109,13 @@
 extern crate alloc;
 
 pub struct Error {
-    _private: (),
+    #[allow(dead_code)]
+    inner: ErrorInner,
+}
+
+enum ErrorInner {
+    #[cfg(feature = "std")]
+    Error(std::io::Error),
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
@@ -142,15 +159,58 @@ pub trait Write {
 /// * `impl<T> Read for AllowStd<T> where T: crate::Read`
 pub struct AllowStd<T>(pub T);
 
-#[cfg(not(feature = "alloc"))]
-mod impls_on_neither {}
+/// A type that never implements any of the `std::io` traits.
+///
+/// This is the reverse escape hatch to `AllowStd`. It allows this crate to provide a generic impl
+/// that Rust knows can never collide with another blanket impl bounded by `std::io::Read` or
+/// `std::io::Write`.
+pub struct NotIo<T>(pub T);
 
-#[cfg(feature = "alloc")]
-mod impls_on_alloc {}
+/// Impls that are special in `no_std`, no-`alloc` but also appear differently in `alloc`.
+/// Currently none.
+#[cfg(not(feature = "alloc"))]
+mod impls_on_neither {
+}
+
+/// Impls that are implement on the `std` feature by the `io::Read`/`io::Write` bounds but
+/// individually here.
+#[cfg(not(feature = "std"))]
+mod impls_generic_in_std {
+    use super::{AllowStd, Result};
+    impl super::Read for AllowStd<&'_ [u8]> {
+        fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+            let len = self.0.len().min(buf.len());
+            buf[..len].copy_from_slice(&self.0);
+            Ok(len)
+        }
+    }
+
+    impl super::Write for AllowStd<&'_ mut [u8]> {
+        fn write(&mut self, buf: &[u8]) -> Result<usize> {
+            let len = self.0.len().min(buf.len());
+            let (head, tail) = core::mem::take(&mut self.0).split_at_mut(len);
+            head.copy_from_slice(buf);
+            self.0 = tail;
+            Ok(len)
+        }
+    }
+}
+
+/// Impls that are generic with `std` but individual on `alloc`.
+#[cfg(all(feature = "alloc", not(feature = "alloc")))]
+mod impls_only_in_alloc {
+    use super::{AllowStd, Result};
+    impl super::Write for alloc::vec::Vec<u8> {
+        fn write(&mut self, buf: &[u8]) -> Result<usize> {
+            self.0.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+    }
+}
 
 #[cfg(feature = "std")]
 mod impls_on_std {
-    use super::{AllowStd, Error, Result};
+    use super::{AllowStd, Error, ErrorInner, Result};
     use std::io::{self, IoSlice, IoSliceMut};
 
     impl<R: io::Read> super::Read for AllowStd<R> {
@@ -199,8 +259,10 @@ mod impls_on_std {
     }
 
     impl From<io::Error> for Error {
-        fn from(_: io::Error) -> Error {
-            Error { _private: () }
+        fn from(err: io::Error) -> Error {
+            Error {
+                inner: ErrorInner::Error(err),
+            }
         }
     }
 }
