@@ -103,10 +103,12 @@
 //! }
 //! ```
 //!
-#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(all(not(feature = "std"), not(feature = "compat")), no_std)]
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
+#[cfg(all(feature = "alloc", not(feature = "std"), not(feature = "compat")))]
 extern crate alloc;
+#[cfg(all(feature = "alloc", feature = "compat"))]
+use ::std as alloc;
 
 pub struct Error {
     #[allow(dead_code)]
