@@ -113,14 +113,30 @@ pub struct Error {
     inner: ErrorInner,
 }
 
-#[non_exhaustive]
+/// A non-exhaustive enum of simple error kinds.
+///
+/// When the `compat` feature is selected this is instead implemented by a variant that you must
+/// not match. However, it will not have any performance costs as the respective variant is
+/// implemented in such a way that `rustc` is able to prove that it can never be constructed and
+/// hence eliminates all branches matching it.
+#[cfg_attr(not(feature = "compat"), non_exhaustive)]
 pub enum ErrorKind {
-    /// The blocking read or write was not completed.
-    Interrupted,
     /// No bytes of a buffer have been written.
     WriteZero,
     /// No bytes of a buffer have been read.
     UnexpectedEof,
+    #[cfg(feature = "compat")]
+    #[doc(hidden)]
+    __NonExhaustive(_private::NonExhaustiveMarker),
+}
+
+#[cfg(feature = "compat")]
+mod _private {
+    pub struct NonExhaustiveMarker {
+        pub(crate) inner: Void,
+    }
+
+    pub(crate) enum Void {}
 }
 
 enum ErrorInner {
@@ -343,9 +359,10 @@ mod impls_on_std {
         pub(crate) fn from_kind_impl(kind: super::ErrorKind) -> Self {
             use super::ErrorKind::*;
             let kind = match kind {
-                Interrupted => io::ErrorKind::Interrupted,
                 WriteZero => io::ErrorKind::WriteZero,
                 UnexpectedEof => io::ErrorKind::UnexpectedEof,
+                #[cfg(feature = "compat")]
+                __NonExhaustive(marker) => match marker.inner {},
             };
             io::Error::from(kind).into()
         }
