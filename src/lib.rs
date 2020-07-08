@@ -113,19 +113,74 @@ pub struct Error {
     inner: ErrorInner,
 }
 
+#[non_exhaustive]
+pub enum ErrorKind {
+    /// The blocking read or write was not completed.
+    Interrupted,
+    /// No bytes of a buffer have been written.
+    WriteZero,
+    /// No bytes of a buffer have been read.
+    UnexpectedEof,
+}
+
 enum ErrorInner {
+    #[cfg(not(feature = "std"))]
+    Kind(ErrorKind),
     #[cfg(feature = "std")]
     Error(std::io::Error),
+}
+
+/// Public interface block for `Error`, independent of features.
+impl Error {
+    pub fn is_interrupted(&self) -> bool {
+        // Dispatch to feature combination.
+        self.is_interrupted_impl()
+    }
+
+    pub(crate) fn from_kind(kind: ErrorKind) -> Self {
+        // Dispatch to feature combination.
+        Self::from_kind_impl(kind)
+    }
+}
+
+impl From<ErrorKind> for Error {
+    fn from(err: ErrorKind) -> Self {
+        Error::from_kind(err)
+    }
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
 
 pub trait Read {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize>;
+
+    fn read_exact(&mut self, mut buf: &mut [u8]) -> Result<()> {
+        while !buf.is_empty() {
+            match self.read(buf) {
+                Ok(0) => return Err(Error::from(ErrorKind::UnexpectedEof)),
+                Ok(n) => buf = &mut buf[n..],
+                Err(ref e) if e.is_interrupted() => {},
+                Err(e) => return Err(e),
+            }
+        }
+
+        Ok(())
+    }
 }
 
 pub trait Write {
     fn write(&mut self, buf: &[u8]) -> Result<usize>;
+
+    fn write_all(&mut self, mut buf: &[u8]) -> Result<()> {
+        while !buf.is_empty() {
+            match self.write(buf) {
+                Ok(0) => return Err(Error::from(ErrorKind::WriteZero)),
+                Ok(n) => buf = &buf[n..],
+                Err(ref e) if e.is_interrupted() => {}
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(())}
 }
 
 /// A simple new type wrapper holding a potential reader or writer.
@@ -192,6 +247,18 @@ mod impls_generic_in_std {
             head.copy_from_slice(buf);
             self.0 = tail;
             Ok(len)
+        }
+    }
+
+    impl super::Error {
+        pub(crate) fn is_interrupted_impl(&self) -> bool {
+            false
+        }
+
+        pub(crate) fn from_kind_impl(kind: super::ErrorKind) -> Self {
+            super::Error {
+                inner: super::ErrorInner::Kind(kind),
+            }
         }
     }
 }
@@ -263,6 +330,24 @@ mod impls_on_std {
             Error {
                 inner: ErrorInner::Error(err),
             }
+        }
+    }
+
+    impl super::Error {
+        pub(crate) fn is_interrupted_impl(&self) -> bool {
+            match &self.inner {
+                ErrorInner::Error(err) => err.kind() == io::ErrorKind::Interrupted,
+            }
+        }
+
+        pub(crate) fn from_kind_impl(kind: super::ErrorKind) -> Self {
+            use super::ErrorKind::*;
+            let kind = match kind {
+                Interrupted => io::ErrorKind::Interrupted,
+                WriteZero => io::ErrorKind::WriteZero,
+                UnexpectedEof => io::ErrorKind::UnexpectedEof,
+            };
+            io::Error::from(kind).into()
         }
     }
 }
