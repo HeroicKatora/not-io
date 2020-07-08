@@ -103,24 +103,42 @@
 //! }
 //! ```
 //!
-#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(all(not(feature = "std"), not(feature = "compat")), no_std)]
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
+#[cfg(all(feature = "alloc", not(feature = "std"), not(feature = "compat")))]
 extern crate alloc;
+#[cfg(all(feature = "alloc", feature = "compat"))]
+use ::std as alloc;
 
 pub struct Error {
     #[allow(dead_code)]
     inner: ErrorInner,
 }
 
-#[non_exhaustive]
+/// A non-exhaustive enum of simple error kinds.
+///
+/// When the `compat` feature is selected this is instead implemented by a variant that you must
+/// not match. However, it will not have any performance costs as the respective variant is
+/// implemented in such a way that `rustc` is able to prove that it can never be constructed and
+/// hence eliminates all branches matching it.
+#[cfg_attr(not(feature = "compat"), non_exhaustive)]
 pub enum ErrorKind {
-    /// The blocking read or write was not completed.
-    Interrupted,
     /// No bytes of a buffer have been written.
     WriteZero,
     /// No bytes of a buffer have been read.
     UnexpectedEof,
+    #[cfg(feature = "compat")]
+    #[doc(hidden)]
+    __NonExhaustive(_private::NonExhaustiveMarker),
+}
+
+#[cfg(feature = "compat")]
+mod _private {
+    pub struct NonExhaustiveMarker {
+        pub(crate) inner: Void,
+    }
+
+    pub(crate) enum Void {}
 }
 
 enum ErrorInner {
@@ -243,7 +261,13 @@ mod impls_generic_in_std {
     impl super::Write for AllowStd<&'_ mut [u8]> {
         fn write(&mut self, buf: &[u8]) -> Result<usize> {
             let len = self.0.len().min(buf.len());
+            #[cfg(not(feature = "compat"))]
             let (head, tail) = core::mem::take(&mut self.0).split_at_mut(len);
+            #[cfg(feature = "compat")]
+            let (head, tail) = {
+                let slice = core::mem::replace(&mut self.0, <&mut [_]>::default());
+                slice.split_at_mut(len)
+            };
             head.copy_from_slice(buf);
             self.0 = tail;
             Ok(len)
@@ -278,7 +302,9 @@ mod impls_only_in_alloc {
 #[cfg(feature = "std")]
 mod impls_on_std {
     use super::{AllowStd, Error, ErrorInner, Result};
-    use std::io::{self, IoSlice, IoSliceMut};
+    use std::io;
+    #[cfg(not(feature = "compat"))]
+    use std::io::{IoSlice, IoSliceMut};
 
     impl<R: io::Read> super::Read for AllowStd<R> {
         fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
@@ -290,6 +316,7 @@ mod impls_on_std {
         fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
             self.0.read(buf)
         }
+        #[cfg(not(feature = "compat"))] // Otherwise auto-derived.
         fn read_vectored(&mut self, bufs: &mut [IoSliceMut]) -> io::Result<usize> {
             self.0.read_vectored(bufs)
         }
@@ -317,6 +344,7 @@ mod impls_on_std {
         fn flush(&mut self) -> io::Result<()> {
             self.0.flush()
         }
+        #[cfg(not(feature = "compat"))] // Otherwise auto-derived.
         fn write_vectored(&mut self, bufs: &[IoSlice]) -> io::Result<usize> {
             self.0.write_vectored(bufs)
         }
@@ -343,9 +371,10 @@ mod impls_on_std {
         pub(crate) fn from_kind_impl(kind: super::ErrorKind) -> Self {
             use super::ErrorKind::*;
             let kind = match kind {
-                Interrupted => io::ErrorKind::Interrupted,
                 WriteZero => io::ErrorKind::WriteZero,
                 UnexpectedEof => io::ErrorKind::UnexpectedEof,
+                #[cfg(feature = "compat")]
+                __NonExhaustive(marker) => match marker.inner {},
             };
             io::Error::from(kind).into()
         }
