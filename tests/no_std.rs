@@ -18,5 +18,5 @@ const XXX: () = {
 
 #[test]
 fn evaluate_consts() {
-    let _:() = XXX;
+    let _: () = XXX;
 }

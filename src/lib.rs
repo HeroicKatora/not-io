@@ -174,7 +174,7 @@ pub trait Read {
             match self.read(buf) {
                 Ok(0) => return Err(Error::from(ErrorKind::UnexpectedEof)),
                 Ok(n) => buf = &mut buf[n..],
-                Err(ref e) if e.is_interrupted() => {},
+                Err(ref e) if e.is_interrupted() => {}
                 Err(e) => return Err(e),
             }
         }
@@ -182,7 +182,6 @@ pub trait Read {
         Ok(())
     }
 }
-
 
 /// Replicates the standard `Write` trait, with a simpler error.
 ///

@@ -9,4 +9,3 @@ impl super::Error {
         }
     }
 }
-

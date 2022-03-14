@@ -1,0 +1,36 @@
+name: Rust CI
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: ["1.48", stable, beta, nightly]
+        features: ["", alloc, std]
+        command: [build, test]
+    steps:
+    - uses: actions/checkout@v2
+    - run: rustup default ${{ matrix.rust }}
+    - name: test
+      run: >
+        cargo test --tests --benches --no-default-features --features "$FEATURES"
+      env:
+        FEATURES: ${{ matrix.features }}
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+        components: rustfmt
+    - name: Run rustfmt check
+      uses: actions-rs/cargo@v1
+      with:
+        command: fmt
+        args: -- --check
