@@ -1,3 +1,4 @@
+// FIXME: specialize impls? Many are copies from `impls_nostd_noalloc.rs`
 use super::Result;
 use crate::alloc::{string::String, vec::Vec};
 
@@ -7,6 +8,16 @@ impl super::Read for &'_ [u8] {
         buf[..len].copy_from_slice(&self[..len]);
         *self = &self[len..];
         Ok(len)
+    }
+}
+
+impl super::BufRead for &'_ [u8] {
+    fn fill_buf(&mut self) -> Result<&[u8]> {
+        Ok(*self)
+    }
+
+    fn consume(&mut self, n: usize) {
+        *self = &self[n..];
     }
 }
 
@@ -78,6 +89,14 @@ pub(crate) fn read_to_string<R: super::Read + ?Sized>(
     r: &mut R,
     buf: &mut String,
 ) -> Result<usize> {
+    append_to_string(r, buf, |r, buf| read_to_end(r, buf))
+}
+
+pub(crate) fn append_to_string<R: super::Read + ?Sized>(
+    r: &mut R,
+    buf: &mut String,
+    mut reader: impl FnMut(&mut R, &mut Vec<u8>) -> Result<usize>,
+) -> Result<usize> {
     struct Utf8Guard<'vec> {
         buf: &'vec mut Vec<u8>,
         len: usize,
@@ -90,11 +109,49 @@ pub(crate) fn read_to_string<R: super::Read + ?Sized>(
         }
     };
 
-    let ret = read_to_end(r, guard.buf);
+    let ret = reader(r, guard.buf);
     if core::str::from_utf8(&guard.buf[guard.len..]).is_err() {
         ret.and_then(|_| Err(super::Error::from(super::ErrorKind::InvalidData)))
     } else {
         guard.len = guard.buf.len();
         ret
     }
+}
+
+pub(crate) fn read_until<R: super::BufRead + ?Sized>(
+    r: &mut R,
+    byte: u8,
+    buf: &mut Vec<u8>,
+) -> Result<usize> {
+    let mut read = 0;
+
+    loop {
+        let available = match r.fill_buf() {
+            Ok(n) => n,
+            Err(ref e) if e.is_interrupted() => continue,
+            Err(e) => return Err(e),
+        };
+
+        let (done, used) = match available.iter().position(|&b| b == byte) {
+            Some(n) => {
+                buf.extend_from_slice(&available[..=n]);
+                (true, n + 1)
+            }
+            None => {
+                buf.extend_from_slice(available);
+                (false, available.len())
+            }
+        };
+
+        r.consume(used);
+        read += used;
+
+        if done || used == 0 {
+            return Ok(read);
+        }
+    }
+}
+
+pub(crate) fn read_line<R: super::BufRead + ?Sized>(r: &mut R, buf: &mut String) -> Result<usize> {
+    append_to_string(r, buf, |r, buf| read_until(r, b'\n', buf))
 }

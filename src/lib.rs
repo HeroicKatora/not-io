@@ -202,6 +202,37 @@ pub trait Read {
     }
 }
 
+pub trait BufRead: Read {
+    fn fill_buf(&mut self) -> Result<&[u8]>;
+
+    fn consume(&mut self, amt: usize);
+
+    #[cfg(feature = "alloc")]
+    fn read_until(&mut self, byte: u8, buf: &mut alloc::vec::Vec<u8>) -> Result<usize> {
+        impls_alloc::read_until(self, byte, buf)
+    }
+
+    #[cfg(feature = "alloc")]
+    fn read_line(&mut self, buf: &mut alloc::string::String) -> Result<usize> {
+        impls_alloc::read_line(self, buf)
+    }
+}
+
+pub trait Seek {
+    fn seek(&mut self, pos: SeekFrom) -> Result<u64>;
+
+    fn stream_position(&mut self) -> Result<u64> {
+        self.seek(SeekFrom::Current(0))
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SeekFrom {
+    Start(u64),
+    End(i64),
+    Current(i64),
+}
+
 /// Replicates the standard `Write` trait, with a simpler error.
 ///
 /// With `std`-feature enabled this is an actual duplicate. Note that it is implemented for the

@@ -1,4 +1,4 @@
-use not_io::{AllowStd, Read, Write};
+use not_io::{AllowStd, BufRead, Read, Write};
 
 extern crate alloc;
 use alloc::{string::String, vec::Vec};
@@ -53,4 +53,27 @@ fn read_to_fail() {
     let mut buffer = String::new();
 
     assert!(matches!(Read::read_to_string(source, &mut buffer), Err(_)));
+}
+
+#[test]
+fn read_buf() {
+    const SOURCE: &str = "Hello, world";
+    let ref mut source = SOURCE.as_bytes();
+    assert!(matches!(source.fill_buf(), Ok(src) if src == SOURCE.as_bytes()));
+
+    let mut buffer = Vec::new();
+    assert!(matches!(source.read_until(b',', &mut buffer), Ok(6)));
+    assert_eq!(buffer, b"Hello,");
+}
+
+#[test]
+fn read_buf_to_string() {
+    const SOURCE: &[u8] = b"Hello,\n\xfeworld";
+    let ref mut source = &SOURCE[..];
+    let mut buffer = String::new();
+
+    assert!(matches!(source.read_line(&mut buffer), Ok(7)));
+    assert_eq!(buffer, "Hello,\n");
+
+    assert!(matches!(source.read_line(&mut buffer), Err(_)));
 }

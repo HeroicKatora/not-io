@@ -14,6 +14,16 @@ impl super::Read for &'_ [u8] {
     }
 }
 
+impl super::BufRead for &'_ [u8] {
+    fn fill_buf(&mut self) -> Result<&[u8]> {
+        Ok(*self)
+    }
+
+    fn consume(&mut self, n: usize) {
+        *self = &self[n..];
+    }
+}
+
 impl super::Write for AllowStd<&'_ mut [u8]> {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         self.0.write(buf)
