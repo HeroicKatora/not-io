@@ -4,9 +4,18 @@ Not the `std::io` module, but a very close compatibility interface for
 no-std/no-alloc environments. This dissolves into a shim-layer when std
 features are enabled, with a trick to _guarantee_ compatibility.
 
+This approach works because, luckily, no `std::io` trait has any _non-default_
+function that consumes an allocated container. Only some extension methods
+exist which may be implemented sub-optimally if the implementer crate provides
+no opt-in to the features.
+
 This crate aims to stay as close to `std` and `alloc` as possible. No
-extensions are planned and the traits will strictly _tail_ stabilized
-interface. No exceptions.
+extensions of the traits are planned and the traits will strictly _tail_
+stabilized interface. No exceptions. For example, `no_std` may rely more
+heavily on `EWOULDBLOCK`/`WouldBlock` to 'refill' streams by an outer loop.
+However, we will _not_ add any helpers here. Propose those as an official RFC
+(or libs-PR if small enough), or simply provide an extension crate, which is
+what a stable, compatible version policy (`1.0`) enables.
 
 ## Comparison to similar crates
 
