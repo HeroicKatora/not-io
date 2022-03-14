@@ -60,7 +60,7 @@ impl From<io::Error> for Error {
 
 impl From<Error> for std::io::Error {
     fn from(err: Error) -> std::io::Error {
-        let ErrorInner::Err(io) = err.inner;
+        let ErrorInner::Error(io) = err.inner;
         io
     }
 }

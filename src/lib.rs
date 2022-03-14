@@ -105,7 +105,7 @@
 //!
 #![cfg_attr(all(not(feature = "std"), not(feature = "compat")), no_std)]
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
+#[cfg(all(feature = "alloc"))]
 extern crate alloc;
 
 /// An opaque error.
@@ -256,6 +256,12 @@ mod impls_nostd_noalloc;
 /// individually here.
 #[cfg(not(feature = "std"))]
 mod impls_nostd;
+
+/// Impls that depend only on the ability to allocate.
+/// These include all methods to read or write to containers, as well as buffers. It doesn't
+/// include `AllowStd`-impls as those are either individual or generic, with feature `std`.
+#[cfg(feature = "alloc")]
+mod impls_alloc;
 
 /// Impls that are generic with `std` but individual on `alloc`.
 #[cfg(all(feature = "alloc", not(feature = "std")))]
