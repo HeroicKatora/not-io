@@ -65,6 +65,13 @@ impl From<Error> for std::io::Error {
     }
 }
 
+impl core::fmt::Debug for super::ErrorInner {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        let super::ErrorInner::Error(io) = self;
+        core::fmt::Debug::fmt(io, f)
+    }
+}
+
 impl super::Error {
     pub(crate) fn is_interrupted_impl(&self) -> bool {
         match &self.inner {
@@ -74,10 +81,13 @@ impl super::Error {
 
     pub(crate) fn from_kind_impl(kind: super::ErrorKind) -> Self {
         use super::ErrorKind::*;
-        let kind = match kind {
+        io::Error::from(match kind {
             WriteZero => io::ErrorKind::WriteZero,
             UnexpectedEof => io::ErrorKind::UnexpectedEof,
-        };
-        io::Error::from(kind).into()
+            Interrupted => io::ErrorKind::Interrupted,
+            WouldBlock => io::ErrorKind::WouldBlock,
+            InvalidData => io::ErrorKind::InvalidData,
+        })
+        .into()
     }
 }

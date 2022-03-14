@@ -1,3 +1,10 @@
+impl core::fmt::Debug for super::ErrorInner {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        let super::ErrorInner::Kind(inner) = self;
+        core::fmt::Debug::fmt(inner, f)
+    }
+}
+
 impl super::Error {
     pub(crate) fn is_interrupted_impl(&self) -> bool {
         false

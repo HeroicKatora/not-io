@@ -113,6 +113,7 @@ extern crate alloc;
 /// This is either equivalent to `std::io::Error` when the `std` feature is enabled, or it's a
 /// stripped down version. In any case it is constructible from the non-exhaustive `ErrorKind` that
 /// lists all the simple error conditions that do not depend on OS implementation.
+#[derive(Debug)]
 pub struct Error {
     #[allow(dead_code)]
     inner: ErrorInner,
@@ -125,11 +126,19 @@ pub struct Error {
 /// implemented in such a way that `rustc` is able to prove that it can never be constructed and
 /// hence eliminates all branches matching it.
 #[non_exhaustive]
+#[derive(Debug)]
 pub enum ErrorKind {
     /// No bytes of a buffer have been written.
     WriteZero,
     /// No bytes of a buffer have been read.
     UnexpectedEof,
+    /// Event required spurious return in a blocking IO(-like) interface.
+    /// Often best handled by retrying.
+    Interrupted,
+    /// Signals that a unfinished stream has no data, until refilled by some concurrent source.
+    WouldBlock,
+    /// Stream did not contain valid UTF-8 (or other encoding).
+    InvalidData,
 }
 
 enum ErrorInner {
@@ -141,7 +150,7 @@ enum ErrorInner {
 
 /// Public interface block for `Error`, independent of features.
 impl Error {
-    pub fn is_interrupted(&self) -> bool {
+    pub(crate) fn is_interrupted(&self) -> bool {
         // Dispatch to feature combination.
         self.is_interrupted_impl()
     }
@@ -180,6 +189,16 @@ pub trait Read {
         }
 
         Ok(())
+    }
+
+    #[cfg(feature = "alloc")]
+    fn read_to_end(&mut self, buf: &mut alloc::vec::Vec<u8>) -> Result<usize> {
+        impls_alloc::read_to_end(self, buf)
+    }
+
+    #[cfg(feature = "alloc")]
+    fn read_to_string(&mut self, buf: &mut alloc::string::String) -> Result<usize> {
+        impls_alloc::read_to_string(self, buf)
     }
 }
 
