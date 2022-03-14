@@ -105,11 +105,14 @@
 //!
 #![cfg_attr(all(not(feature = "std"), not(feature = "compat")), no_std)]
 
-#[cfg(all(feature = "alloc", not(feature = "std"), not(feature = "compat")))]
+#[cfg(all(feature = "alloc", not(feature = "std")))]
 extern crate alloc;
-#[cfg(all(feature = "alloc", feature = "compat"))]
-use ::std as alloc;
 
+/// An opaque error.
+///
+/// This is either equivalent to `std::io::Error` when the `std` feature is enabled, or it's a
+/// stripped down version. In any case it is constructible from the non-exhaustive `ErrorKind` that
+/// lists all the simple error conditions that do not depend on OS implementation.
 pub struct Error {
     #[allow(dead_code)]
     inner: ErrorInner,
@@ -121,24 +124,12 @@ pub struct Error {
 /// not match. However, it will not have any performance costs as the respective variant is
 /// implemented in such a way that `rustc` is able to prove that it can never be constructed and
 /// hence eliminates all branches matching it.
-#[cfg_attr(not(feature = "compat"), non_exhaustive)]
+#[non_exhaustive]
 pub enum ErrorKind {
     /// No bytes of a buffer have been written.
     WriteZero,
     /// No bytes of a buffer have been read.
     UnexpectedEof,
-    #[cfg(feature = "compat")]
-    #[doc(hidden)]
-    __NonExhaustive(_private::NonExhaustiveMarker),
-}
-
-#[cfg(feature = "compat")]
-mod _private {
-    pub struct NonExhaustiveMarker {
-        pub(crate) inner: Void,
-    }
-
-    pub(crate) enum Void {}
 }
 
 enum ErrorInner {
@@ -169,6 +160,12 @@ impl From<ErrorKind> for Error {
 
 pub type Result<T> = core::result::Result<T, Error>;
 
+/// Replicates the standard `Read` trait, with a simpler error.
+///
+/// With `std`-feature enabled this is an actual duplicate. Note that it is implemented for the
+/// generic `AllowStd<impl Read>` family if `std` is enabled, and on select instances such as
+/// `AllowStd<&[u8]>` otherwise. Additionally, the trait is implemented for all select types
+/// directly.
 pub trait Read {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize>;
 
@@ -186,8 +183,19 @@ pub trait Read {
     }
 }
 
+
+/// Replicates the standard `Write` trait, with a simpler error.
+///
+/// With `std`-feature enabled this is an actual duplicate. Note that it is implemented for the
+/// generic `AllowStd<impl Write>` family if `std` is enabled, and on select instances such as
+/// `AllowStd<&mut [u8]>` otherwise. Additionally, the trait is implemented for all select types
+/// directly.
+///
+/// FIXME: should proxy `write_vectored` and `write_fmt`.
 pub trait Write {
     fn write(&mut self, buf: &[u8]) -> Result<usize>;
+
+    fn flush(&mut self) -> Result<()>;
 
     fn write_all(&mut self, mut buf: &[u8]) -> Result<()> {
         while !buf.is_empty() {
@@ -198,7 +206,8 @@ pub trait Write {
                 Err(e) => return Err(e),
             }
         }
-        Ok(())}
+        Ok(())
+    }
 }
 
 /// A simple new type wrapper holding a potential reader or writer.
@@ -240,143 +249,17 @@ pub struct AllowStd<T>(pub T);
 pub struct NotIo<T>(pub T);
 
 /// Impls that are special in `no_std`, no-`alloc` but also appear differently in `alloc`.
-/// Currently none.
 #[cfg(not(feature = "alloc"))]
-mod impls_on_neither {
-}
+mod impls_nostd_noalloc;
 
 /// Impls that are implement on the `std` feature by the `io::Read`/`io::Write` bounds but
 /// individually here.
 #[cfg(not(feature = "std"))]
-mod impls_generic_in_std {
-    use super::{AllowStd, Result};
-    impl super::Read for AllowStd<&'_ [u8]> {
-        fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-            let len = self.0.len().min(buf.len());
-            buf[..len].copy_from_slice(&self.0);
-            Ok(len)
-        }
-    }
-
-    impl super::Write for AllowStd<&'_ mut [u8]> {
-        fn write(&mut self, buf: &[u8]) -> Result<usize> {
-            let len = self.0.len().min(buf.len());
-            #[cfg(not(feature = "compat"))]
-            let (head, tail) = core::mem::take(&mut self.0).split_at_mut(len);
-            #[cfg(feature = "compat")]
-            let (head, tail) = {
-                let slice = core::mem::replace(&mut self.0, <&mut [_]>::default());
-                slice.split_at_mut(len)
-            };
-            head.copy_from_slice(buf);
-            self.0 = tail;
-            Ok(len)
-        }
-    }
-
-    impl super::Error {
-        pub(crate) fn is_interrupted_impl(&self) -> bool {
-            false
-        }
-
-        pub(crate) fn from_kind_impl(kind: super::ErrorKind) -> Self {
-            super::Error {
-                inner: super::ErrorInner::Kind(kind),
-            }
-        }
-    }
-}
+mod impls_nostd;
 
 /// Impls that are generic with `std` but individual on `alloc`.
-#[cfg(all(feature = "alloc", not(feature = "alloc")))]
-mod impls_only_in_alloc {
-    use super::{AllowStd, Result};
-    impl super::Write for alloc::vec::Vec<u8> {
-        fn write(&mut self, buf: &[u8]) -> Result<usize> {
-            self.0.extend_from_slice(buf);
-            Ok(buf.len())
-        }
-    }
-}
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+mod impls_nostd_alloc;
 
 #[cfg(feature = "std")]
-mod impls_on_std {
-    use super::{AllowStd, Error, ErrorInner, Result};
-    use std::io;
-    #[cfg(not(feature = "compat"))]
-    use std::io::{IoSlice, IoSliceMut};
-
-    impl<R: io::Read> super::Read for AllowStd<R> {
-        fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-            io::Read::read(&mut self.0, buf).map_err(Error::from)
-        }
-    }
-
-    impl<R: io::Read> io::Read for AllowStd<R> {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            self.0.read(buf)
-        }
-        #[cfg(not(feature = "compat"))] // Otherwise auto-derived.
-        fn read_vectored(&mut self, bufs: &mut [IoSliceMut]) -> io::Result<usize> {
-            self.0.read_vectored(bufs)
-        }
-        fn read_to_end(&mut self, buf: &mut Vec<u8>) -> io::Result<usize> {
-            self.0.read_to_end(buf)
-        }
-        fn read_to_string(&mut self, buf: &mut String) -> io::Result<usize> {
-            self.0.read_to_string(buf)
-        }
-        fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
-            self.0.read_exact(buf)
-        }
-    }
-
-    impl<W: io::Write> super::Write for AllowStd<W> {
-        fn write(&mut self, buf: &[u8]) -> Result<usize> {
-            io::Write::write(&mut self.0, buf).map_err(Error::from)
-        }
-    }
-
-    impl<W: io::Write> io::Write for AllowStd<W> {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.0.write(buf)
-        }
-        fn flush(&mut self) -> io::Result<()> {
-            self.0.flush()
-        }
-        #[cfg(not(feature = "compat"))] // Otherwise auto-derived.
-        fn write_vectored(&mut self, bufs: &[IoSlice]) -> io::Result<usize> {
-            self.0.write_vectored(bufs)
-        }
-        fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
-            self.0.write_all(buf)
-        }
-    }
-
-    impl From<io::Error> for Error {
-        fn from(err: io::Error) -> Error {
-            Error {
-                inner: ErrorInner::Error(err),
-            }
-        }
-    }
-
-    impl super::Error {
-        pub(crate) fn is_interrupted_impl(&self) -> bool {
-            match &self.inner {
-                ErrorInner::Error(err) => err.kind() == io::ErrorKind::Interrupted,
-            }
-        }
-
-        pub(crate) fn from_kind_impl(kind: super::ErrorKind) -> Self {
-            use super::ErrorKind::*;
-            let kind = match kind {
-                WriteZero => io::ErrorKind::WriteZero,
-                UnexpectedEof => io::ErrorKind::UnexpectedEof,
-                #[cfg(feature = "compat")]
-                __NonExhaustive(marker) => match marker.inner {},
-            };
-            io::Error::from(kind).into()
-        }
-    }
-}
+mod impls_std;

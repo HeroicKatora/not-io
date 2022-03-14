@@ -15,8 +15,14 @@ categories = ["embedded", "no-std"]
 alloc = []
 # Enable std dependency compatibility.
 std = ["alloc"]
-# Enable compatibility with earlier versions of rustc at the price of
-# efficiency in implementation. This will NOT have SemVer breaking effects but
-# might add new interfaces to compensate for reduced usability of another (e.g.
-# an alternative to later-stabilized std methods).
-compat = []
+
+[[tests]]
+path = "no_std.rs"
+
+[[tests]]
+path = "no_alloc.rs"
+features = ["alloc"]
+
+[[tests]]
+path = "std.rs"
+features = ["std"]
