@@ -110,9 +110,11 @@ extern crate alloc;
 
 mod cursor;
 mod empty;
+mod read_adaptor;
 
 pub use self::cursor::Cursor;
 pub use self::empty::{Empty, Repeat, Sink};
+pub use self::read_adaptor::Take;
 
 /// An opaque error.
 ///
@@ -208,6 +210,13 @@ pub trait Read {
     fn read_to_string(&mut self, buf: &mut alloc::string::String) -> Result<usize> {
         impls_alloc::read_to_string(self, buf)
     }
+
+    fn take(self, limit: u64) -> Take<Self>
+    where
+        Self: Sized,
+    {
+        Take { inner: self, limit }
+    }
 }
 
 pub trait BufRead: Read {
@@ -265,6 +274,14 @@ pub trait Write {
         }
         Ok(())
     }
+}
+
+pub fn copy<R, W>(read: &mut R, write: &mut W) -> Result<u64>
+where
+    R: Read + ?Sized,
+    W: Write + ?Sized,
+{
+    impls_always::stack_copy(read, write)
 }
 
 pub fn empty() -> Empty {

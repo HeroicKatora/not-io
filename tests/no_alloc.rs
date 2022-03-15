@@ -1,4 +1,4 @@
-use not_io::{AllowStd, Cursor, BufRead, Read, Seek, SeekFrom, Write};
+use not_io::{AllowStd, BufRead, Cursor, Read, Seek, SeekFrom, Write};
 
 fn is_read<R: Read>() {}
 fn is_write<W: Write>() {}
@@ -35,4 +35,12 @@ fn cursor_seek_end() {
 
     stream.seek(SeekFrom::End(-1)).expect("allowed");
     assert!(matches!(stream.fill_buf(), Ok(b"!")));
+}
+
+#[test]
+fn copy() {
+    const SOURCE: &[u8] = b"Hello, world!";
+    assert!(
+        matches!(not_io::copy(&mut &SOURCE[..], &mut not_io::sink()), Ok(len) if len as usize == SOURCE.len())
+    );
 }

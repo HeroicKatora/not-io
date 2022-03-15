@@ -1,4 +1,4 @@
-use not_io::{AllowStd, BufRead, Cursor, Empty, Read, Repeat, Seek, Sink, Write};
+use not_io::{AllowStd, BufRead, Cursor, Empty, Read, Repeat, Seek, Sink, Take, Write};
 
 extern crate alloc;
 use alloc::{string::String, vec::Vec};
@@ -31,6 +31,8 @@ const XXX: () = {
     let _ = is_write::<Sink>;
     let _ = is_read::<Repeat>;
     let _ = is_write::<&'static Sink>;
+    let _ = is_read::<Take<Empty>>;
+    let _ = is_buf_read::<Take<Empty>>;
 };
 
 #[test]
@@ -116,4 +118,28 @@ fn buf_writer_cursor_mid() {
     assert_eq!(cursor.position(), SOURCE.len() as u64);
     assert_eq!(buffer.len(), SOURCE.len());
     assert_eq!(buffer[..7], [0; 7]);
+}
+
+#[test]
+fn take_short() {
+    const SOURCE: &[u8] = b"Hello, world";
+    let mut reader = Read::take(&SOURCE[..], 5);
+    let mut buffer = vec![0u8; 0];
+
+    assert!(matches!(reader.fill_buf(), Ok(b"Hello")));
+    assert!(matches!(reader.read_to_end(&mut buffer), Ok(5)));
+    assert!(matches!(reader.fill_buf(), Ok(&[])));
+    assert_eq!(buffer, b"Hello");
+}
+
+#[test]
+fn take_long() {
+    const SOURCE: &[u8] = b"Hello, world";
+    let mut reader = Read::take(&SOURCE[..], 0x42);
+    let mut buffer = vec![0u8; 0];
+
+    assert!(matches!(reader.fill_buf(), Ok(SOURCE)));
+    assert!(matches!(reader.read_to_end(&mut buffer), Ok(len) if len == SOURCE.len()));
+    assert!(matches!(reader.fill_buf(), Ok(&[])));
+    assert_eq!(buffer, SOURCE);
 }
