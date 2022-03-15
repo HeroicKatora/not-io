@@ -66,7 +66,7 @@ where
             base_pos.checked_sub(offset.wrapping_neg() as u64)
         };
 
-        self.pos = new_pos.ok_or_else(|| ErrorKind::InvalidData)?;
+        self.pos = new_pos.ok_or_else(|| ErrorKind::InvalidInput)?;
         Ok(self.pos)
     }
 

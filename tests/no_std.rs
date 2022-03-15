@@ -1,4 +1,4 @@
-use not_io::{AllowStd, BufRead, Read, Write};
+use not_io::{AllowStd, BufRead, Cursor, Read, Write};
 
 extern crate alloc;
 use alloc::{string::String, vec::Vec};
@@ -17,6 +17,8 @@ const XXX: () = {
     let _ = is_read::<AllowStd<&'static [u8]>>;
     let _ = is_write::<AllowStd<&'static mut [u8]>>;
     let _ = is_write::<AllowStd<Vec<u8>>>;
+    let _ = is_write::<Cursor<Vec<u8>>>;
+    let _ = is_write::<Cursor<&'static mut Vec<u8>>>;
 };
 
 #[test]
@@ -76,4 +78,30 @@ fn read_buf_to_string() {
     assert_eq!(buffer, "Hello,\n");
 
     assert!(matches!(source.read_line(&mut buffer), Err(_)));
+}
+
+#[test]
+fn buf_writer_cursor() {
+    const SOURCE: &[u8] = b"Hello, world";
+    let mut buffer = vec![0u8; 0];
+
+    let mut cursor = Cursor::new(&mut buffer);
+    cursor.write_all(SOURCE).unwrap();
+
+    assert_eq!(cursor.position(), SOURCE.len() as u64);
+    assert_eq!(buffer, SOURCE);
+}
+
+#[test]
+fn buf_writer_cursor_mid() {
+    const SOURCE: &[u8] = b"Hello, world";
+    let mut buffer = vec![0u8; 0];
+
+    let mut cursor = Cursor::new(&mut buffer);
+    cursor.set_position(7);
+    cursor.write_all(&SOURCE[7..]).unwrap();
+
+    assert_eq!(cursor.position(), SOURCE.len() as u64);
+    assert_eq!(buffer.len(), SOURCE.len());
+    assert_eq!(buffer[..7], [0; 7]);
 }

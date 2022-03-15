@@ -1,5 +1,5 @@
 // FIXME: specialize impls? Many are copies from `impls_nostd_noalloc.rs`
-use super::Result;
+use super::{ErrorKind, Result};
 use crate::alloc::{string::String, vec::Vec};
 
 impl super::Read for &'_ [u8] {
@@ -154,4 +154,38 @@ pub(crate) fn read_until<R: super::BufRead + ?Sized>(
 
 pub(crate) fn read_line<R: super::BufRead + ?Sized>(r: &mut R, buf: &mut String) -> Result<usize> {
     append_to_string(r, buf, |r, buf| read_until(r, b'\n', buf))
+}
+
+fn vec_write(pos_mut: &mut u64, vec: &mut Vec<u8>, buf: &[u8]) -> super::Result<usize> {
+    let pos = usize::try_from(*pos_mut).map_err(|_| ErrorKind::InvalidInput)?;
+
+    // Simulate zeroed content for all interior content.
+    let newlen = vec.len().max(pos);
+    vec.resize(newlen, 0);
+    let (overwrite, fill) = buf.split_at(buf.len().min(newlen - pos));
+    vec[pos..][..overwrite.len()].copy_from_slice(overwrite);
+    vec.extend_from_slice(fill);
+
+    *pos_mut = (pos + buf.len()) as u64;
+    Ok(buf.len())
+}
+
+impl super::Write for super::Cursor<&mut Vec<u8>> {
+    fn write(&mut self, buf: &[u8]) -> super::Result<usize> {
+        vec_write(&mut self.pos, &mut *self.inner, buf)
+    }
+
+    fn flush(&mut self) -> super::Result<()> {
+        Ok(())
+    }
+}
+
+impl super::Write for super::Cursor<Vec<u8>> {
+    fn write(&mut self, buf: &[u8]) -> super::Result<usize> {
+        vec_write(&mut self.pos, &mut self.inner, buf)
+    }
+
+    fn flush(&mut self) -> super::Result<()> {
+        Ok(())
+    }
 }

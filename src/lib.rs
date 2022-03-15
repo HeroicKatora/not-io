@@ -143,6 +143,8 @@ pub enum ErrorKind {
     WouldBlock,
     /// Stream did not contain valid UTF-8 (or other encoding).
     InvalidData,
+    /// Argument to an IO function was not valid.
+    InvalidInput,
 }
 
 enum ErrorInner {

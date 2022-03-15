@@ -87,6 +87,7 @@ impl super::Error {
             Interrupted => io::ErrorKind::Interrupted,
             WouldBlock => io::ErrorKind::WouldBlock,
             InvalidData => io::ErrorKind::InvalidData,
+            InvalidInput => io::ErrorKind::InvalidInput,
         })
         .into()
     }
