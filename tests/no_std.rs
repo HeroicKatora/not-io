@@ -1,4 +1,4 @@
-use not_io::{AllowStd, BufRead, Cursor, Read, Write};
+use not_io::{AllowStd, BufRead, Cursor, Empty, Read, Repeat, Seek, Sink, Write};
 
 extern crate alloc;
 use alloc::{string::String, vec::Vec};
@@ -9,6 +9,8 @@ mod _alloc;
 
 fn is_read<R: Read>() {}
 fn is_write<W: Write>() {}
+fn is_buf_read<R: BufRead>() {}
+fn is_seek<R: Seek>() {}
 
 const XXX: () = {
     let _ = is_read::<&'static [u8]>;
@@ -18,7 +20,17 @@ const XXX: () = {
     let _ = is_write::<AllowStd<&'static mut [u8]>>;
     let _ = is_write::<AllowStd<Vec<u8>>>;
     let _ = is_write::<Cursor<Vec<u8>>>;
+    let _ = is_seek::<Cursor<Vec<u8>>>;
     let _ = is_write::<Cursor<&'static mut Vec<u8>>>;
+    let _ = is_seek::<Cursor<&'static mut Vec<u8>>>;
+    let _ = is_write::<Cursor<Vec<u8>>>;
+    let _ = is_seek::<Cursor<Vec<u8>>>;
+    let _ = is_read::<Empty>;
+    let _ = is_buf_read::<Empty>;
+    let _ = is_seek::<Empty>;
+    let _ = is_write::<Sink>;
+    let _ = is_read::<Repeat>;
+    let _ = is_write::<&'static Sink>;
 };
 
 #[test]

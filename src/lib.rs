@@ -109,8 +109,10 @@
 extern crate alloc;
 
 mod cursor;
+mod empty;
 
 pub use self::cursor::Cursor;
+pub use self::empty::{Empty, Repeat, Sink};
 
 /// An opaque error.
 ///
@@ -263,6 +265,18 @@ pub trait Write {
         }
         Ok(())
     }
+}
+
+pub fn empty() -> Empty {
+    Empty { _private: () }
+}
+
+pub fn sink() -> Sink {
+    Sink { _private: () }
+}
+
+pub fn repeat(byte: u8) -> Repeat {
+    Repeat { byte }
 }
 
 /// A simple new type wrapper holding a potential reader or writer.

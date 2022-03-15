@@ -1,5 +1,5 @@
+use super::{BufRead, Cursor, Empty, Read, Repeat, Result, Seek, SeekFrom, Sink, Write};
 use crate::ErrorKind;
-use super::{BufRead, Cursor, Read, Result, Seek, SeekFrom, Write};
 
 impl<T> Read for Cursor<T>
 where
@@ -72,5 +72,60 @@ where
 
     fn stream_position(&mut self) -> Result<u64> {
         Ok(self.pos)
+    }
+}
+
+impl Read for Empty {
+    fn read(&mut self, _: &mut [u8]) -> Result<usize> {
+        Ok(0)
+    }
+}
+
+impl BufRead for Empty {
+    fn fill_buf(&mut self) -> Result<&[u8]> {
+        Ok(&[])
+    }
+
+    fn consume(&mut self, _: usize) {}
+}
+
+impl Seek for Empty {
+    fn seek(&mut self, _: SeekFrom) -> Result<u64> {
+        Ok(0)
+    }
+    fn stream_position(&mut self) -> Result<u64> {
+        Ok(0)
+    }
+}
+
+impl Read for Repeat {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        buf.iter_mut().for_each(|b| *b = self.byte);
+        Ok(buf.len())
+    }
+
+    fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
+        Read::read(self, buf)?;
+        Ok(())
+    }
+}
+
+impl Write for Sink {
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl Write for &'_ Sink {
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        Ok(())
     }
 }
