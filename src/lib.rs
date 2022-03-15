@@ -108,6 +108,10 @@
 #[cfg(all(feature = "alloc"))]
 extern crate alloc;
 
+mod cursor;
+
+pub use self::cursor::Cursor;
+
 /// An opaque error.
 ///
 /// This is either equivalent to `std::io::Error` when the `std` feature is enabled, or it's a
@@ -296,6 +300,8 @@ pub struct AllowStd<T>(pub T);
 /// that Rust knows can never collide with another blanket impl bounded by `std::io::Read` or
 /// `std::io::Write`.
 pub struct NotIo<T>(pub T);
+
+mod impls_always;
 
 /// Impls that are special in `no_std`, no-`alloc` but also appear differently in `alloc`.
 #[cfg(not(feature = "alloc"))]
