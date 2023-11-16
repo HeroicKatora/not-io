@@ -13,16 +13,22 @@ use std::io::{BufRead, Read, Seek};
 /// instantiating with `R = &mut dyn Read` wouldn't make sense as the setters would not be usable,
 /// their bounds can never be met. And combining traits into a large dyn-trait is redundant as it
 /// trait-impls become part of the static validity requirement again.
-pub struct Reader<R: Read> {
+pub struct Reader<R> {
     inner: R,
+    read: *mut dyn Read,
     seek: Option<*mut dyn Seek>,
     buf: Option<*mut dyn BufRead>,
 }
 
 impl<R: Read> Reader<R> {
-    pub fn new(reader: R) -> Self {
+    pub fn new<'lt>(mut reader: R) -> Self
+        where R: 'lt
+    {
+        let read = lifetime_erase_trait_vtable!((&mut reader): 'lt as Read);
+
         Reader {
             inner: reader,
+            read,
             seek: None,
             buf: None,
         }
@@ -39,14 +45,11 @@ impl<R: Read> Reader<R> {
     }
 
     /// Insert the vtable for the `BufRead` trait.
-    pub fn set_buf<'lt>(&mut self)
+    pub fn set_buf(&mut self)
     where
-        R: BufRead + 'lt,
+        R: BufRead,
     {
-        let vtable = (&mut self.inner) as &mut (dyn BufRead + 'lt) as *mut (dyn BufRead + 'lt);
-        // Safety: Transmuting pointer-to-pointer, and they only differ by lifetime. Types must not
-        // be specialized on lifetime parameters.
-        self.buf = Some(unsafe { core::mem::transmute::<_, *mut (dyn BufRead + 'static)>(vtable) });
+        self.buf = Some(lifetime_erase_trait_vtable!((&mut self.inner): '_ as BufRead));
     }
 
     /// Insert the vtable for the `Seek` trait.
@@ -57,10 +60,21 @@ impl<R: Read> Reader<R> {
     where
         R: Seek,
     {
-        let vtable = (&mut self.inner) as &mut (dyn Seek + '_) as *mut (dyn Seek + '_);
-        // Safety: Transmuting pointer-to-pointer, and they only differ by lifetime. Types must not
-        // be specialized on lifetime parameters.
-        self.seek = Some(unsafe { core::mem::transmute::<_, *mut (dyn Seek + 'static)>(vtable) });
+        self.seek = Some(lifetime_erase_trait_vtable!((&mut self.inner): '_ as Seek));
+    }
+}
+
+impl<R> Reader<R> {
+    pub fn as_read(&self) -> &(dyn Read + '_) {
+        let ptr = &self.inner as *const R;
+        let local = ptr.with_metadata_of(self.read);
+        unsafe { &* local }
+    }
+
+    pub fn as_read_mut(&mut self) -> &mut (dyn Read + '_) {
+        let ptr = &mut self.inner as *mut R;
+        let local = ptr.with_metadata_of(self.read);
+        unsafe { &mut* local }
     }
 
     pub fn as_buf(&self) -> Option<&(dyn BufRead + '_)> {

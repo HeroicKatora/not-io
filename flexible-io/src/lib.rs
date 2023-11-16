@@ -6,6 +6,17 @@
 //! does not depend on it, and an error should be returned.
 #![feature(set_ptr_value)]
 
+macro_rules! lifetime_erase_trait_vtable {
+    ((&mut $r:expr): $lt:lifetime as $trait:path) => {
+        {
+            // Safety: Transmuting pointer-to-pointer, and they only differ by lifetime. Types must not
+            // be specialized on lifetime parameters.
+            let vtable = (&mut $r) as &mut (dyn $trait + $lt) as *mut (dyn $trait + $lt);
+            unsafe { core::mem::transmute::<_, *mut (dyn $trait + 'static)>(vtable) }
+        }
+    }
+}
+
 mod reader;
 mod writer;
 
