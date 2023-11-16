@@ -10,6 +10,39 @@ use std::io::{Write, Seek};
 /// compiler that the bound is met, inserting the vtable from the impl instance. Afterward, the
 /// bound is not required by any user. Using the (mutable) getters recombines the vtable with the
 /// underlying value.
+///
+/// ## Usage
+///
+/// ```
+/// # use flexible_io::Writer;
+/// use std::io::SeekFrom;
+///
+/// let mut buffer: Vec<u8> = vec![];
+/// let cursor = std::io::Cursor::new(&mut buffer);
+/// let mut writer = Writer::new(cursor);
+/// assert!(writer.as_seek().is_none());
+///
+/// writer
+///     .as_write_mut()
+///     .write_all(b"Hello, brain!")
+///     .unwrap();
+///
+/// // But cursors are seekable, let's tell everyone.
+/// writer.set_seek();
+/// assert!(writer.as_seek().is_some());
+///
+/// // Now use the Seek implementation to undo our mistake
+/// let seek = writer.as_seek_mut().unwrap();
+/// seek.seek(SeekFrom::Start(7));
+///
+/// writer
+///     .as_write_mut()
+///     .write_all(b"world!")
+///     .unwrap();
+///
+/// let contents: &Vec<u8> = writer.get_ref().get_ref();
+/// assert_eq!(contents, b"Hello, world!");
+/// ```
 pub struct Writer<W> {
     inner: W,
     write: *mut dyn Write,

@@ -18,6 +18,24 @@ use std::io::{BufRead, Read, Seek};
 /// instantiating with `R = &mut dyn Read` wouldn't make sense as the setters would not be usable,
 /// their bounds can never be met. And combining traits into a large dyn-trait is redundant as it
 /// trait-impls become part of the static validity requirement again.
+///
+/// ## Usage
+///
+/// ```
+/// # use flexible_io::Reader;
+/// let mut buffer: &[u8] = b"Hello, world!";
+/// let mut reader = Reader::new(&mut buffer);
+/// assert!(reader.as_buf().is_none());
+///
+/// // But slices are buffered readers, let's tell everyone.
+/// reader.set_buf();
+/// assert!(reader.as_buf().is_some());
+///
+/// // Now use the ReadBuf implementation directly
+/// let buffered = reader.as_buf_mut().unwrap();
+/// buffered.consume(7);
+/// assert_eq!(buffered.fill_buf().unwrap(), b"world!");
+/// ```
 pub struct Reader<R> {
     inner: R,
     read: *mut dyn Read,
