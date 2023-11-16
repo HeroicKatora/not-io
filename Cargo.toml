@@ -28,3 +28,6 @@ required-features = ["alloc"]
 [[test]]
 name = "with_std"
 required-features = ["std"]
+
+[workspace]
+members = [".", "flexible-io"]
