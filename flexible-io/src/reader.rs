@@ -1,7 +1,7 @@
 use std::io::{BufRead, Read, Seek};
 
 
-/// A reader, which can _dynamically_ implement IO traits.
+/// A reader, which can dynamically provide IO traits.
 ///
 /// The following traits may be optionally dynamically provided:
 ///

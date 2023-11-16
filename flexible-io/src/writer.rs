@@ -1,6 +1,6 @@
 use std::io::{Write, Seek};
 
-/// A reader, which can _dynamically_ implement IO traits.
+/// A writer, which can dynamically provide IO traits.
 ///
 /// The following traits may be optionally dynamically provided:
 ///
