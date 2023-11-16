@@ -62,7 +62,8 @@ pub struct IoReport {
 /// direct caller need not worry about this in the interface. Only `Read` is a hard
 /// requirement. Another third party can make the choice whether there is a vtable for `Seek`
 /// or not with our caller just passing this encapsulation on.
-pub fn read_with_skip<R: Read>(
+pub fn read_with_skip<R>(
+    // Extra swag: no `Read` bound either! Wat?
     mut file: Reader<R>,
     skip: u64,
     buffer: &mut Vec<u8>,
@@ -87,7 +88,7 @@ pub fn read_with_skip<R: Read>(
         while skip > 0 {
             let bound = usize::try_from(skip).unwrap_or(usize::MAX);
             let exact_read = buffer.len().min(bound);
-            let actual = file.get_mut().read(&mut buffer[..exact_read])?;
+            let actual = file.as_read_mut().read(&mut buffer[..exact_read])?;
             report.num_read += 1;
 
             if actual == 0 {
@@ -98,7 +99,7 @@ pub fn read_with_skip<R: Read>(
         }
     }
 
-    let reader = file.get_mut();
+    let reader = file.as_read_mut();
     let inner = read_to_end(reader, buffer)?;
     report.num_seek += inner.num_seek;
     report.num_read += inner.num_read;
@@ -108,7 +109,7 @@ pub fn read_with_skip<R: Read>(
 
 // Poly-fill for std::io::Read::read_to_end (default), with a report on the number of actual reads
 // that were used; for the purpose of IO-accounting.
-fn read_to_end<R: Read>(
+fn read_to_end<R: Read + ?Sized>(
     reader: &mut R,
     buffer: &mut Vec<u8>,
 ) -> Result<IoReport, std::io::Error> {
