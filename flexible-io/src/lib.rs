@@ -4,6 +4,12 @@
 //! in case of it being buffered, but it's not required for correct functioning. Or, an API where
 //! the Seek requirement is only determined at runtime, such as when a portion of the functionality
 //! does not depend on it, and an error should be returned.
+//!
+//! Note that the wrapped type can not be unsized (`dyn` trait) itself. This may be fixed at a
+//! later point to make the reader suitable for use in embedded. In particular, the double
+//! indirection of instantiating with `R = &mut dyn Read` wouldn't make sense as the setters would
+//! not be usable, their bounds can never be met. And combining traits into a large dyn-trait is
+//! redundant as it trait-impls become part of the static validity requirement again.
 #![feature(set_ptr_value)]
 
 macro_rules! lifetime_erase_trait_vtable {

@@ -3,6 +3,11 @@ use std::io::{BufRead, Read, Seek};
 
 /// A reader, which can _dynamically_ implement IO traits.
 ///
+/// The following traits may be optionally dynamically provided:
+///
+/// * [`Seek`](std::io::Seek).
+/// * [`BufRead`](std::io::BufRead).
+///
 /// The struct comes with a number of setter methods. The call to these requires proof to the
 /// compiler that the bound is met, inserting the vtable from the impl instance. Afterward, the
 /// bound is not required by any user. Using the (mutable) getters recombines the vtable with the
@@ -21,10 +26,8 @@ pub struct Reader<R> {
 }
 
 impl<R: Read> Reader<R> {
-    pub fn new<'lt>(mut reader: R) -> Self
-        where R: 'lt
-    {
-        let read = lifetime_erase_trait_vtable!((&mut reader): 'lt as Read);
+    pub fn new(mut reader: R) -> Self {
+        let read = lifetime_erase_trait_vtable!((&mut reader): '_ as Read);
 
         Reader {
             inner: reader,
