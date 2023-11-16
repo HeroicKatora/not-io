@@ -11,6 +11,7 @@
 //! not be usable, their bounds can never be met. And combining traits into a large dyn-trait is
 //! redundant as it trait-impls become part of the static validity requirement again.
 #![feature(set_ptr_value)]
+#[deny(missing_docs)]
 
 macro_rules! lifetime_erase_trait_vtable {
     ((&mut $r:expr): $lt:lifetime as $trait:path) => {
@@ -23,8 +24,10 @@ macro_rules! lifetime_erase_trait_vtable {
     }
 }
 
-mod reader;
-mod writer;
+/// Provides wrappers for values of [`Read`](std::io::Read) types.
+pub mod reader;
+/// Provides wrappers for values of [`Write`](std::io::Write) types.
+pub mod writer;
 
 pub use reader::Reader;
 pub use writer::Writer;

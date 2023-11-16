@@ -5,8 +5,8 @@ use std::io::{BufRead, Read, Seek};
 ///
 /// The following traits may be optionally dynamically provided:
 ///
-/// * [`Seek`](std::io::Seek).
-/// * [`BufRead`](std::io::BufRead).
+/// * [`Seek`]
+/// * [`BufRead`]
 ///
 /// The struct comes with a number of setter methods. The call to these requires proof to the
 /// compiler that the bound is met, inserting the vtable from the impl instance. Afterward, the
@@ -26,6 +26,7 @@ pub struct Reader<R> {
 }
 
 impl<R: Read> Reader<R> {
+    /// Wrap an underlying reader by-value.
     pub fn new(mut reader: R) -> Self {
         let read = lifetime_erase_trait_vtable!((&mut reader): '_ as Read);
 
@@ -47,7 +48,9 @@ impl<R: Read> Reader<R> {
         &mut self.inner
     }
 
-    /// Insert the vtable for the `BufRead` trait.
+    /// Set the V-Table for [`BufRead`].
+    ///
+    /// After this call, the methods [`Self::as_buf`] and [`Self::as_buf_mut`] will return values.
     pub fn set_buf(&mut self)
     where
         R: BufRead,
@@ -55,10 +58,9 @@ impl<R: Read> Reader<R> {
         self.buf = Some(lifetime_erase_trait_vtable!((&mut self.inner): '_ as BufRead));
     }
 
-    /// Insert the vtable for the `Seek` trait.
+    /// Set the V-Table for [`Seek`].
     ///
-    /// This call itself requires proof to the compiler that the bound is met, inserting the vtable
-    /// from the impl instance. The bound is not required by any user of that inserted vtable.
+    /// After this call, the methods [`Self::as_seek`] and [`Self::as_seek_mut`] will return values.
     pub fn set_seek(&mut self)
     where
         R: Seek,
@@ -68,36 +70,54 @@ impl<R: Read> Reader<R> {
 }
 
 impl<R> Reader<R> {
+    /// Get the inner value as a dynamic `Read` reference.
     pub fn as_read(&self) -> &(dyn Read + '_) {
         let ptr = &self.inner as *const R;
         let local = ptr.with_metadata_of(self.read);
         unsafe { &* local }
     }
 
+    /// Get the inner value as a mutable dynamic `Read` reference.
     pub fn as_read_mut(&mut self) -> &mut (dyn Read + '_) {
         let ptr = &mut self.inner as *mut R;
         let local = ptr.with_metadata_of(self.read);
         unsafe { &mut* local }
     }
 
+    /// Get the inner value as a dynamic `BufRead` reference.
+    ///
+    /// This returns `None` unless a previous call to [`Self::set_buf`] as executed, by any other caller.
+    /// The value can be moved after such call arbitrarily.
     pub fn as_buf(&self) -> Option<&(dyn BufRead + '_)> {
         let ptr = &self.inner as *const R;
         let local = ptr.with_metadata_of(self.buf?);
         Some(unsafe { &* local })
     }
 
+    /// Get the inner value as a mutable dynamic `BufRead` reference.
+    ///
+    /// This returns `None` unless a previous call to [`Self::set_buf`] as executed, by any other caller.
+    /// The value can be moved after such call arbitrarily.
     pub fn as_buf_mut(&mut self) -> Option<&mut (dyn BufRead + '_)> {
         let ptr = &mut self.inner as *mut R;
         let local = ptr.with_metadata_of(self.buf?);
         Some(unsafe { &mut* local })
     }
 
+    /// Get the inner value as a dynamic `Seek` reference.
+    ///
+    /// This returns `None` unless a previous call to [`Self::set_seek`] as executed, by any other caller.
+    /// The value can be moved after such call arbitrarily.
     pub fn as_seek(&self) -> Option<&(dyn Seek + '_)> {
         let ptr = &self.inner as *const R;
         let local = ptr.with_metadata_of(self.seek?);
         Some(unsafe { &* local })
     }
 
+    /// Get the inner value as a mutable dynamic `Seek` reference.
+    ///
+    /// This returns `None` unless a previous call to [`Self::set_seek`] as executed, by any other caller.
+    /// The value can be moved after such call arbitrarily.
     pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
         let ptr = &mut self.inner as *mut R;
         let local = ptr.with_metadata_of(self.seek?);
