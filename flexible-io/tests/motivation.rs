@@ -7,9 +7,8 @@
 //! Similarly, `BufRead` can be more efficient yet requiring it will force some callers into
 //! double-buffering and rob them of the *choice* of buffering. This is demonstrated in
 //! `read_TODO`.
-use std::io::{Read, SeekFrom};
 use flexible_io::Reader;
-
+use std::io::{Read, SeekFrom};
 
 #[test]
 fn motivating_case() {
@@ -67,9 +66,7 @@ pub fn read_with_skip<R>(
     mut file: Reader<R>,
     skip: u64,
     buffer: &mut Vec<u8>,
-)
-    -> Result<IoReport, std::io::Error>
-{
+) -> Result<IoReport, std::io::Error> {
     let mut report = IoReport::default();
 
     if let Some(seekable) = file.as_seek_mut() {

@@ -1,4 +1,4 @@
-use std::io::{Write, Seek};
+use std::io::{Seek, Write};
 
 /// A writer, which can dynamically provide IO traits.
 ///
@@ -87,14 +87,14 @@ impl<W> Writer<W> {
     pub fn as_write(&self) -> &(dyn Write + '_) {
         let ptr = &self.inner as *const W;
         let local = ptr.with_metadata_of(self.write);
-        unsafe { &* local }
+        unsafe { &*local }
     }
 
     /// Get the inner value as a mutable dynamic `Write` reference.
     pub fn as_write_mut(&mut self) -> &mut (dyn Write + '_) {
         let ptr = &mut self.inner as *mut W;
         let local = ptr.with_metadata_of(self.write);
-        unsafe { &mut* local }
+        unsafe { &mut *local }
     }
 
     /// Get the inner value as a dynamic `Seek` reference.
@@ -104,7 +104,7 @@ impl<W> Writer<W> {
     pub fn as_seek(&self) -> Option<&(dyn Seek + '_)> {
         let ptr = &self.inner as *const W;
         let local = ptr.with_metadata_of(self.seek?);
-        Some(unsafe { &* local })
+        Some(unsafe { &*local })
     }
 
     /// Get the inner value as a mutable dynamic `Seek` reference.
@@ -114,6 +114,6 @@ impl<W> Writer<W> {
     pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
         let ptr = &mut self.inner as *mut W;
         let local = ptr.with_metadata_of(self.seek?);
-        Some(unsafe { &mut* local })
+        Some(unsafe { &mut *local })
     }
 }

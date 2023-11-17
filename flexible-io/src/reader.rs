@@ -1,6 +1,5 @@
 use std::io::{BufRead, Read, Seek};
 
-
 /// A reader, which can dynamically provide IO traits.
 ///
 /// The following traits may be optionally dynamically provided:
@@ -92,14 +91,14 @@ impl<R> Reader<R> {
     pub fn as_read(&self) -> &(dyn Read + '_) {
         let ptr = &self.inner as *const R;
         let local = ptr.with_metadata_of(self.read);
-        unsafe { &* local }
+        unsafe { &*local }
     }
 
     /// Get the inner value as a mutable dynamic `Read` reference.
     pub fn as_read_mut(&mut self) -> &mut (dyn Read + '_) {
         let ptr = &mut self.inner as *mut R;
         let local = ptr.with_metadata_of(self.read);
-        unsafe { &mut* local }
+        unsafe { &mut *local }
     }
 
     /// Get the inner value as a dynamic `BufRead` reference.
@@ -109,7 +108,7 @@ impl<R> Reader<R> {
     pub fn as_buf(&self) -> Option<&(dyn BufRead + '_)> {
         let ptr = &self.inner as *const R;
         let local = ptr.with_metadata_of(self.buf?);
-        Some(unsafe { &* local })
+        Some(unsafe { &*local })
     }
 
     /// Get the inner value as a mutable dynamic `BufRead` reference.
@@ -119,7 +118,7 @@ impl<R> Reader<R> {
     pub fn as_buf_mut(&mut self) -> Option<&mut (dyn BufRead + '_)> {
         let ptr = &mut self.inner as *mut R;
         let local = ptr.with_metadata_of(self.buf?);
-        Some(unsafe { &mut* local })
+        Some(unsafe { &mut *local })
     }
 
     /// Get the inner value as a dynamic `Seek` reference.
@@ -129,7 +128,7 @@ impl<R> Reader<R> {
     pub fn as_seek(&self) -> Option<&(dyn Seek + '_)> {
         let ptr = &self.inner as *const R;
         let local = ptr.with_metadata_of(self.seek?);
-        Some(unsafe { &* local })
+        Some(unsafe { &*local })
     }
 
     /// Get the inner value as a mutable dynamic `Seek` reference.
@@ -139,6 +138,6 @@ impl<R> Reader<R> {
     pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
         let ptr = &mut self.inner as *mut R;
         let local = ptr.with_metadata_of(self.seek?);
-        Some(unsafe { &mut* local })
+        Some(unsafe { &mut *local })
     }
 }
