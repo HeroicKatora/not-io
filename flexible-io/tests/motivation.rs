@@ -7,7 +7,7 @@
 //! Similarly, `BufRead` can be more efficient yet requiring it will force some callers into
 //! double-buffering and rob them of the *choice* of buffering. This is demonstrated in
 //! `read_TODO`.
-use flexible_io::{Reader, reader::ReaderMut};
+use flexible_io::{reader::ReaderMut, Reader};
 use std::io::{Read, SeekFrom};
 
 #[test]

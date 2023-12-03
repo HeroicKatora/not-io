@@ -88,7 +88,12 @@ impl<R> Reader<R> {
     pub fn as_mut(&mut self) -> ReaderMut<'_> {
         // Copy out all the vtable portions, we need a mutable reference to `self` for the
         // conversion into a dynamically typed `&mut dyn Read`.
-        let Reader { inner: _, read: _, seek, buf } = *self;
+        let Reader {
+            inner: _,
+            read: _,
+            seek,
+            buf,
+        } = *self;
 
         ReaderMut {
             inner: self.as_read_mut(),

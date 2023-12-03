@@ -93,7 +93,11 @@ impl<W> Writer<W> {
     pub fn as_mut(&mut self) -> WriterMut<'_> {
         // Copy out all the vtable portions, we need a mutable reference to `self` for the
         // conversion into a dynamically typed `&mut dyn Read`.
-        let Writer { inner: _, write: _, seek } = *self;
+        let Writer {
+            inner: _,
+            write: _,
+            seek,
+        } = *self;
 
         WriterMut {
             inner: self.as_write_mut(),
