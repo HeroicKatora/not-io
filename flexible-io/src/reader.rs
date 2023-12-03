@@ -67,7 +67,9 @@ impl<R: Read> Reader<R> {
             buf: None,
         }
     }
+}
 
+impl<R> Reader<R> {
     /// Provide access to the underlying reader.
     pub fn get_ref(&self) -> &R {
         &self.inner
@@ -77,9 +79,7 @@ impl<R: Read> Reader<R> {
     pub fn get_mut(&mut self) -> &mut R {
         &mut self.inner
     }
-}
 
-impl<R> Reader<R> {
     /// Get a view equivalent to very-fat mutable reference.
     ///
     /// This erases the concrete type `R` which allows consumers that intend to avoid polymorphic

@@ -49,6 +49,18 @@ pub struct Writer<W> {
     seek: Option<*mut dyn Seek>,
 }
 
+/// A mutable reference to a [`Writer`].
+///
+/// This type acts similar to a *very* fat mutable reference. It can be obtained by constructing a
+/// concrete reader type and calling [`Writer::as_mut`].
+///
+/// Note: Any mutable reference to a `Reader` implements `Into<ReaderMut>` for its lifetime. Use
+/// this instead of coercion which would be available if this was a builtin kind of reference.
+pub struct WriterMut<'lt> {
+    inner: &'lt mut dyn Write,
+    seek: Option<*mut dyn Seek>,
+}
+
 impl<W: Write> Writer<W> {
     /// Wrap an underlying writer by-value.
     pub fn new(mut writer: W) -> Self {
@@ -60,7 +72,9 @@ impl<W: Write> Writer<W> {
             seek: None,
         }
     }
+}
 
+impl<W> Writer<W> {
     /// Provide access to the underlying writer.
     pub fn get_ref(&self) -> &W {
         &self.inner
@@ -69,6 +83,22 @@ impl<W: Write> Writer<W> {
     /// Provide mutable access to the underlying writer.
     pub fn get_mut(&mut self) -> &mut W {
         &mut self.inner
+    }
+
+    /// Get a view equivalent to very-fat mutable reference.
+    ///
+    /// This erases the concrete type `W` which allows consumers that intend to avoid polymorphic
+    /// code that monomorphizes. The mutable reference has all accessors of a mutable reference
+    /// except it doesn't offer access with the underlying reader's type itself.
+    pub fn as_mut(&mut self) -> WriterMut<'_> {
+        // Copy out all the vtable portions, we need a mutable reference to `self` for the
+        // conversion into a dynamically typed `&mut dyn Read`.
+        let Writer { inner: _, write: _, seek } = *self;
+
+        WriterMut {
+            inner: self.as_write_mut(),
+            seek,
+        }
     }
 
     /// Set the V-Table of [`Seek`].
@@ -115,5 +145,23 @@ impl<W> Writer<W> {
         let ptr = &mut self.inner as *mut W;
         let local = ptr.with_metadata_of(self.seek?);
         Some(unsafe { &mut *local })
+    }
+}
+
+impl WriterMut<'_> {
+    pub fn as_write_mut(&mut self) -> &mut (dyn Write + '_) {
+        &mut *self.inner
+    }
+
+    pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
+        let ptr = self.inner as *mut dyn Write;
+        let local = ptr.with_metadata_of(self.seek?);
+        Some(unsafe { &mut *local })
+    }
+}
+
+impl<'lt, R> From<&'lt mut Writer<R>> for WriterMut<'lt> {
+    fn from(value: &'lt mut Writer<R>) -> Self {
+        value.as_mut()
     }
 }
