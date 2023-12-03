@@ -42,6 +42,19 @@ pub struct Reader<R> {
     buf: Option<*mut dyn BufRead>,
 }
 
+/// A mutable reference to a [`Reader`].
+///
+/// This type acts similar to a *very* fat mutable reference. It can be obtained by constructing a
+/// concrete reader type and calling [`Reader::as_mut`].
+///
+/// Note: Any mutable reference to a `Reader` implements `Into<ReaderMut>` for its lifetime. Use
+/// this instead of coercion which would be available if this was a builtin kind of reference.
+pub struct ReaderMut<'lt> {
+    inner: &'lt mut dyn Read,
+    seek: Option<*mut dyn Seek>,
+    buf: Option<*mut dyn BufRead>,
+}
+
 impl<R: Read> Reader<R> {
     /// Wrap an underlying reader by-value.
     pub fn new(mut reader: R) -> Self {
@@ -63,6 +76,25 @@ impl<R: Read> Reader<R> {
     /// Provide mutable access to the underlying reader.
     pub fn get_mut(&mut self) -> &mut R {
         &mut self.inner
+    }
+}
+
+impl<R> Reader<R> {
+    /// Get a view equivalent to very-fat mutable reference.
+    ///
+    /// This erases the concrete type `R` which allows consumers that intend to avoid polymorphic
+    /// code that monomorphizes. The mutable reference has all accessors of a mutable reference
+    /// except it doesn't offer access with the underlying reader's type itself.
+    pub fn as_mut(&mut self) -> ReaderMut<'_> {
+        // Copy out all the vtable portions, we need a mutable reference to `self` for the
+        // conversion into a dynamically typed `&mut dyn Read`.
+        let Reader { inner: _, read: _, seek, buf } = *self;
+
+        ReaderMut {
+            inner: self.as_read_mut(),
+            seek,
+            buf,
+        }
     }
 
     /// Set the V-Table for [`BufRead`].
@@ -139,5 +171,29 @@ impl<R> Reader<R> {
         let ptr = &mut self.inner as *mut R;
         let local = ptr.with_metadata_of(self.seek?);
         Some(unsafe { &mut *local })
+    }
+}
+
+impl ReaderMut<'_> {
+    pub fn as_read_mut(&mut self) -> &mut (dyn Read + '_) {
+        &mut *self.inner
+    }
+
+    pub fn as_buf_mut(&mut self) -> Option<&mut (dyn BufRead + '_)> {
+        let ptr = self.inner as *mut dyn Read;
+        let local = ptr.with_metadata_of(self.buf?);
+        Some(unsafe { &mut *local })
+    }
+
+    pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
+        let ptr = self.inner as *mut dyn Read;
+        let local = ptr.with_metadata_of(self.seek?);
+        Some(unsafe { &mut *local })
+    }
+}
+
+impl<'lt, R> From<&'lt mut Reader<R>> for ReaderMut<'lt> {
+    fn from(value: &'lt mut Reader<R>) -> Self {
+        value.as_mut()
     }
 }

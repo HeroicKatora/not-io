@@ -7,16 +7,16 @@
 //! Similarly, `BufRead` can be more efficient yet requiring it will force some callers into
 //! double-buffering and rob them of the *choice* of buffering. This is demonstrated in
 //! `read_TODO`.
-use flexible_io::Reader;
+use flexible_io::{Reader, reader::ReaderMut};
 use std::io::{Read, SeekFrom};
 
 #[test]
 fn motivating_case() {
     {
         let mut untapped: &[u8] = b"Hello, world!";
-        let reader = Reader::new(&mut untapped);
+        let mut reader = Reader::new(&mut untapped);
         let mut buffer = vec![];
-        let report = read_with_skip(reader, 7, &mut buffer).unwrap();
+        let report = read_with_skip(reader.as_mut(), 7, &mut buffer).unwrap();
         assert_eq!(buffer, b"world!");
         assert_eq!(
             report.num_seek, 0,
@@ -35,7 +35,7 @@ fn motivating_case() {
         let mut reader = Reader::new(tapped);
         reader.set_seek();
         let mut buffer = vec![];
-        let report = read_with_skip(reader, 7, &mut buffer).unwrap();
+        let report = read_with_skip(reader.as_mut(), 7, &mut buffer).unwrap();
         assert_eq!(buffer, b"world!");
         assert_eq!(
             report.num_seek, 1,
@@ -61,9 +61,9 @@ pub struct IoReport {
 /// direct caller need not worry about this in the interface. Only `Read` is a hard
 /// requirement. Another third party can make the choice whether there is a vtable for `Seek`
 /// or not with our caller just passing this encapsulation on.
-pub fn read_with_skip<R>(
-    // Extra swag: no `Read` bound either! Wat?
-    mut file: Reader<R>,
+pub fn read_with_skip(
+    // Extra swag: no generic, no `Read` bound either! Wat?
+    mut file: ReaderMut,
     skip: u64,
     buffer: &mut Vec<u8>,
 ) -> Result<IoReport, std::io::Error> {
