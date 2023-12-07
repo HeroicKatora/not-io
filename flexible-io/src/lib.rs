@@ -10,7 +10,7 @@
 //! indirection of instantiating with `R = &mut dyn Read` wouldn't make sense as the setters would
 //! not be usable, their bounds can never be met. And combining traits into a large dyn-trait is
 //! redundant as it trait-impls become part of the static validity requirement again.
-#![feature(set_ptr_value)]
+#![cfg_attr(feature = "unstable_set_ptr_value", feature(set_ptr_value))]
 #[deny(missing_docs)]
 
 macro_rules! lifetime_erase_trait_vtable {
@@ -26,6 +26,8 @@ macro_rules! lifetime_erase_trait_vtable {
 pub mod reader;
 /// Provides wrappers for values of [`Write`](std::io::Write) types.
 pub mod writer;
+
+mod stable_with_metadata_of;
 
 pub use reader::Reader;
 pub use writer::Writer;

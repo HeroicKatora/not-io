@@ -1,4 +1,5 @@
 use std::io::{BufRead, Read, Seek};
+use crate::stable_with_metadata_of::WithMetadataOf;
 
 /// A reader, which can dynamically provide IO traits.
 ///
@@ -127,14 +128,14 @@ impl<R> Reader<R> {
     /// Get the inner value as a dynamic `Read` reference.
     pub fn as_read(&self) -> &(dyn Read + '_) {
         let ptr = &self.inner as *const R;
-        let local = ptr.with_metadata_of(self.read);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.read);
         unsafe { &*local }
     }
 
     /// Get the inner value as a mutable dynamic `Read` reference.
     pub fn as_read_mut(&mut self) -> &mut (dyn Read + '_) {
         let ptr = &mut self.inner as *mut R;
-        let local = ptr.with_metadata_of(self.read);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.read);
         unsafe { &mut *local }
     }
 
@@ -144,7 +145,7 @@ impl<R> Reader<R> {
     /// The value can be moved after such call arbitrarily.
     pub fn as_buf(&self) -> Option<&(dyn BufRead + '_)> {
         let ptr = &self.inner as *const R;
-        let local = ptr.with_metadata_of(self.buf?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.buf?);
         Some(unsafe { &*local })
     }
 
@@ -154,7 +155,7 @@ impl<R> Reader<R> {
     /// The value can be moved after such call arbitrarily.
     pub fn as_buf_mut(&mut self) -> Option<&mut (dyn BufRead + '_)> {
         let ptr = &mut self.inner as *mut R;
-        let local = ptr.with_metadata_of(self.buf?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.buf?);
         Some(unsafe { &mut *local })
     }
 
@@ -164,7 +165,7 @@ impl<R> Reader<R> {
     /// The value can be moved after such call arbitrarily.
     pub fn as_seek(&self) -> Option<&(dyn Seek + '_)> {
         let ptr = &self.inner as *const R;
-        let local = ptr.with_metadata_of(self.seek?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
         Some(unsafe { &*local })
     }
 
@@ -174,7 +175,7 @@ impl<R> Reader<R> {
     /// The value can be moved after such call arbitrarily.
     pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
         let ptr = &mut self.inner as *mut R;
-        let local = ptr.with_metadata_of(self.seek?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
         Some(unsafe { &mut *local })
     }
 }
@@ -186,13 +187,13 @@ impl ReaderMut<'_> {
 
     pub fn as_buf_mut(&mut self) -> Option<&mut (dyn BufRead + '_)> {
         let ptr = self.inner as *mut dyn Read;
-        let local = ptr.with_metadata_of(self.buf?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.buf?);
         Some(unsafe { &mut *local })
     }
 
     pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
         let ptr = self.inner as *mut dyn Read;
-        let local = ptr.with_metadata_of(self.seek?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
         Some(unsafe { &mut *local })
     }
 }

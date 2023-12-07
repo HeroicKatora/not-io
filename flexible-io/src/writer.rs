@@ -1,4 +1,5 @@
 use std::io::{Seek, Write};
+use crate::stable_with_metadata_of::WithMetadataOf;
 
 /// A writer, which can dynamically provide IO traits.
 ///
@@ -120,14 +121,14 @@ impl<W> Writer<W> {
     /// Get the inner value as a dynamic `Write` reference.
     pub fn as_write(&self) -> &(dyn Write + '_) {
         let ptr = &self.inner as *const W;
-        let local = ptr.with_metadata_of(self.write);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.write);
         unsafe { &*local }
     }
 
     /// Get the inner value as a mutable dynamic `Write` reference.
     pub fn as_write_mut(&mut self) -> &mut (dyn Write + '_) {
         let ptr = &mut self.inner as *mut W;
-        let local = ptr.with_metadata_of(self.write);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.write);
         unsafe { &mut *local }
     }
 
@@ -137,7 +138,7 @@ impl<W> Writer<W> {
     /// The value can be moved after such call arbitrarily.
     pub fn as_seek(&self) -> Option<&(dyn Seek + '_)> {
         let ptr = &self.inner as *const W;
-        let local = ptr.with_metadata_of(self.seek?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
         Some(unsafe { &*local })
     }
 
@@ -147,7 +148,7 @@ impl<W> Writer<W> {
     /// The value can be moved after such call arbitrarily.
     pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
         let ptr = &mut self.inner as *mut W;
-        let local = ptr.with_metadata_of(self.seek?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
         Some(unsafe { &mut *local })
     }
 }
@@ -159,7 +160,7 @@ impl WriterMut<'_> {
 
     pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
         let ptr = self.inner as *mut dyn Write;
-        let local = ptr.with_metadata_of(self.seek?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
         Some(unsafe { &mut *local })
     }
 }

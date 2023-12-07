@@ -15,3 +15,6 @@ edition = "2021"
 # rust-version = "1.78" # (hopefully)
 
 [dependencies]
+
+[features]
+unstable_set_ptr_value = []
