@@ -1,5 +1,5 @@
-use std::io::{Seek, Write};
 use crate::stable_with_metadata_of::WithMetadataOf;
+use std::io::{Seek, Write};
 
 /// A writer, which can dynamically provide IO traits.
 ///

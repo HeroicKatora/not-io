@@ -12,11 +12,15 @@ impl<T: ?Sized, U: ?Sized> WithMetadataOf<U> for *const T {
     #[inline(always)]
     fn with_metadata_of_on_stable(self, ptr: *const U) -> Self::Output {
         #[cfg(not(feature = "unstable_set_ptr_value"))]
-        { inject_in_metadata_of(self, ptr) }
+        {
+            inject_in_metadata_of(self, ptr)
+        }
 
         // Use the inherent method as soon as provided! On stable, recursive.
         #[cfg(feature = "unstable_set_ptr_value")]
-        { self.with_metadata_of(ptr) }
+        {
+            self.with_metadata_of(ptr)
+        }
     }
 }
 
@@ -26,11 +30,15 @@ impl<T: ?Sized, U: ?Sized> WithMetadataOf<U> for *mut T {
     #[inline(always)]
     fn with_metadata_of_on_stable(self, ptr: *const U) -> Self::Output {
         #[cfg(not(feature = "unstable_set_ptr_value"))]
-        { inject_in_metadata_of_mut(self, ptr) }
+        {
+            inject_in_metadata_of_mut(self, ptr)
+        }
 
         // Use the inherent method as soon as provided! On stable, recursive.
         #[cfg(feature = "unstable_set_ptr_value")]
-        { self.with_metadata_of(ptr) }
+        {
+            self.with_metadata_of(ptr)
+        }
     }
 }
 

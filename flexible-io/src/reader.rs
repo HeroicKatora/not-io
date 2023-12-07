@@ -1,5 +1,5 @@
-use std::io::{BufRead, Read, Seek};
 use crate::stable_with_metadata_of::WithMetadataOf;
+use std::io::{BufRead, Read, Seek};
 
 /// A reader, which can dynamically provide IO traits.
 ///
