@@ -1,4 +1,4 @@
-use crate::{stable_with_metadata_of::WithMetadataOf, thin_box::ThinErased};
+use crate::stable_with_metadata_of::WithMetadataOf;
 use std::io::{BufRead, Read, Seek};
 
 /// A reader, which can dynamically provide IO traits.
@@ -50,6 +50,9 @@ pub struct Reader<R> {
 ///
 /// Note: Any mutable reference to a `Reader` implements `Into<ReaderMut>` for its lifetime. Use
 /// this instead of coercion which would be available if this was a builtin kind of reference.
+///
+/// Note: Any `Reader` implements `Into<ReaderBox>`, which can again be converted to [`ReaderMut`].
+/// Use it for owning a writer without its specific type similar to `Box<dyn Write>`.
 pub struct ReaderMut<'lt> {
     inner: &'lt mut dyn Read,
     seek: Option<*mut dyn Seek>,
@@ -263,5 +266,11 @@ impl<'lt, R> From<&'lt mut Reader<R>> for ReaderMut<'lt> {
 impl<'lt, R: 'lt> From<Reader<R>> for ReaderBox<'lt> {
     fn from(value: Reader<R>) -> Self {
         value.into_boxed()
+    }
+}
+
+impl<'lt> From<&'lt mut ReaderBox<'_>> for ReaderMut<'lt> {
+    fn from(value: &'lt mut ReaderBox<'_>) -> Self {
+        value.as_mut()
     }
 }

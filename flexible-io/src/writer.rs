@@ -55,10 +55,19 @@ pub struct Writer<W> {
 /// This type acts similar to a *very* fat mutable reference. It can be obtained by constructing a
 /// concrete reader type and calling [`Writer::as_mut`].
 ///
-/// Note: Any mutable reference to a `Reader` implements `Into<ReaderMut>` for its lifetime. Use
-/// this instead of coercion which would be available if this was a builtin kind of reference.
+/// Note: Any mutable reference to a `Writer` implements `Into<WriterMut>` for its lifetime. Use this
+/// instead of coercion which would be available if this was a builtin kind of reference.
+///
+/// Note: Any `Writer` implements `Into<WriterBox>`, which can again be converted to `WriterMut`.
+/// Use it for owning a writer without its specific type similar to `Box<dyn Read>`.
 pub struct WriterMut<'lt> {
     inner: &'lt mut dyn Write,
+    seek: Option<*mut dyn Seek>,
+}
+
+/// A box around a type-erased [`Writer`].
+pub struct WriterBox<'lt> {
+    inner: Box<dyn Write + 'lt>,
     seek: Option<*mut dyn Seek>,
 }
 
@@ -90,7 +99,7 @@ impl<W> Writer<W> {
     ///
     /// This erases the concrete type `W` which allows consumers that intend to avoid polymorphic
     /// code that monomorphizes. The mutable reference has all accessors of a mutable reference
-    /// except it doesn't offer access with the underlying reader's type itself.
+    /// except it doesn't offer access with the underlying writer's type itself.
     pub fn as_mut(&mut self) -> WriterMut<'_> {
         // Copy out all the vtable portions, we need a mutable reference to `self` for the
         // conversion into a dynamically typed `&mut dyn Read`.
@@ -104,6 +113,24 @@ impl<W> Writer<W> {
             inner: self.as_write_mut(),
             seek,
         }
+    }
+
+    /// Get a view equivalent to very-fat mutable reference.
+    ///
+    /// This erases the concrete type `W` which allows consumers that intend to avoid polymorphic
+    /// code that monomorphizes. The mutable reference has all accessors of a mutable reference
+    /// except it doesn't offer access with the underlying reader's type itself.
+    pub fn into_boxed<'lt>(self) -> WriterBox<'lt>
+    where
+        W: 'lt,
+    {
+        let Writer { inner, write, seek } = self;
+
+        let ptr = Box::into_raw(Box::new(inner));
+        let ptr = WithMetadataOf::with_metadata_of_on_stable(ptr, write);
+        let inner = unsafe { Box::from_raw(ptr) };
+
+        WriterBox { inner, seek }
     }
 
     /// Set the V-Table of [`Seek`].
@@ -165,8 +192,39 @@ impl WriterMut<'_> {
     }
 }
 
+impl WriterBox<'_> {
+    pub fn as_mut(&mut self) -> WriterMut<'_> {
+        WriterMut {
+            seek: self.seek,
+            inner: self.as_read_mut(),
+        }
+    }
+
+    pub fn as_read_mut(&mut self) -> &mut (dyn Write + '_) {
+        &mut *self.inner
+    }
+
+    pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
+        let ptr = self.inner.as_mut() as *mut _;
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
+        Some(unsafe { &mut *local })
+    }
+}
+
 impl<'lt, R> From<&'lt mut Writer<R>> for WriterMut<'lt> {
     fn from(value: &'lt mut Writer<R>) -> Self {
+        value.as_mut()
+    }
+}
+
+impl<'lt, R: 'lt> From<Writer<R>> for WriterBox<'lt> {
+    fn from(value: Writer<R>) -> Self {
+        value.into_boxed()
+    }
+}
+
+impl<'lt> From<&'lt mut WriterBox<'_>> for WriterMut<'lt> {
+    fn from(value: &'lt mut WriterBox) -> Self {
         value.as_mut()
     }
 }
