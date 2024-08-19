@@ -49,10 +49,10 @@ fn motivating_case() {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct IoReport {
-    num_seek: u32,
-    num_read: u32,
+    pub num_seek: u32,
+    pub num_read: u32,
 }
 
 /// This operation skips N bytes from the stream, returns the rest read to end.

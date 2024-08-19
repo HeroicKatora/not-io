@@ -1,4 +1,4 @@
-use crate::stable_with_metadata_of::WithMetadataOf;
+use crate::{stable_with_metadata_of::WithMetadataOf, thin_box::ThinErased};
 use std::io::{BufRead, Read, Seek};
 
 /// A reader, which can dynamically provide IO traits.
@@ -56,6 +56,13 @@ pub struct ReaderMut<'lt> {
     buf: Option<*mut dyn BufRead>,
 }
 
+/// A box around a type-erased [`Reader`].
+pub struct ReaderBox<'lt> {
+    inner: Box<dyn Read + 'lt>,
+    seek: Option<*mut dyn Seek>,
+    buf: Option<*mut dyn BufRead>,
+}
+
 impl<R: Read> Reader<R> {
     /// Wrap an underlying reader by-value.
     pub fn new(mut reader: R) -> Self {
@@ -101,6 +108,29 @@ impl<R> Reader<R> {
             seek,
             buf,
         }
+    }
+
+    /// Get an allocated, type-erased very-fat mutable box.
+    ///
+    /// This erases the concrete type `R` which allows consumers that intend to avoid polymorphic
+    /// code that monomorphizes. The mutable reference has all accessors of a mutable reference
+    /// except it doesn't offer access with the underlying reader's type itself.
+    pub fn into_boxed<'lt>(self) -> ReaderBox<'lt>
+    where
+        R: 'lt,
+    {
+        let Reader {
+            inner,
+            read,
+            seek,
+            buf,
+        } = self;
+
+        let ptr = Box::into_raw(Box::new(inner));
+        let ptr = WithMetadataOf::with_metadata_of_on_stable(ptr, read);
+        let inner = unsafe { Box::from_raw(ptr) };
+
+        ReaderBox { inner, seek, buf }
     }
 
     /// Set the V-Table for [`BufRead`].
@@ -198,8 +228,40 @@ impl ReaderMut<'_> {
     }
 }
 
+impl ReaderBox<'_> {
+    pub fn as_mut(&mut self) -> ReaderMut<'_> {
+        ReaderMut {
+            seek: self.seek,
+            buf: self.buf,
+            inner: self.as_read_mut(),
+        }
+    }
+
+    pub fn as_read_mut(&mut self) -> &mut (dyn Read + '_) {
+        &mut *self.inner
+    }
+
+    pub fn as_buf_mut(&mut self) -> Option<&mut (dyn BufRead + '_)> {
+        let ptr = self.inner.as_mut() as *mut _;
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.buf?);
+        Some(unsafe { &mut *local })
+    }
+
+    pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
+        let ptr = self.inner.as_mut() as *mut _;
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
+        Some(unsafe { &mut *local })
+    }
+}
+
 impl<'lt, R> From<&'lt mut Reader<R>> for ReaderMut<'lt> {
     fn from(value: &'lt mut Reader<R>) -> Self {
         value.as_mut()
+    }
+}
+
+impl<'lt, R: 'lt> From<Reader<R>> for ReaderBox<'lt> {
+    fn from(value: Reader<R>) -> Self {
+        value.into_boxed()
     }
 }
