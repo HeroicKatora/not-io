@@ -178,6 +178,11 @@ impl<W> Writer<W> {
         let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
         Some(unsafe { &mut *local })
     }
+
+    /// Unwrap the inner value at its original sized type.
+    pub fn into_inner(self) -> W {
+        self.inner
+    }
 }
 
 impl WriterMut<'_> {
