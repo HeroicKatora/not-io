@@ -39,6 +39,11 @@ use std::io::{BufRead, Read, Seek};
 pub struct Reader<R> {
     inner: R,
     read: *mut dyn Read,
+    vtable: OptTable,
+}
+
+#[derive(Clone, Copy)]
+struct OptTable {
     seek: Option<*mut dyn Seek>,
     buf: Option<*mut dyn BufRead>,
 }
@@ -55,15 +60,13 @@ pub struct Reader<R> {
 /// Use it for owning a writer without its specific type similar to `Box<dyn Write>`.
 pub struct ReaderMut<'lt> {
     inner: &'lt mut dyn Read,
-    seek: Option<*mut dyn Seek>,
-    buf: Option<*mut dyn BufRead>,
+    vtable: OptTable,
 }
 
 /// A box around a type-erased [`Reader`].
 pub struct ReaderBox<'lt> {
     inner: Box<dyn Read + 'lt>,
-    seek: Option<*mut dyn Seek>,
-    buf: Option<*mut dyn BufRead>,
+    vtable: OptTable,
 }
 
 impl<R: Read> Reader<R> {
@@ -74,8 +77,10 @@ impl<R: Read> Reader<R> {
         Reader {
             inner: reader,
             read,
-            seek: None,
-            buf: None,
+            vtable: OptTable {
+                seek: None,
+                buf: None,
+            },
         }
     }
 }
@@ -102,14 +107,12 @@ impl<R> Reader<R> {
         let Reader {
             inner: _,
             read: _,
-            seek,
-            buf,
+            vtable,
         } = *self;
 
         ReaderMut {
             inner: self.as_read_mut(),
-            seek,
-            buf,
+            vtable,
         }
     }
 
@@ -125,15 +128,14 @@ impl<R> Reader<R> {
         let Reader {
             inner,
             read,
-            seek,
-            buf,
+            vtable,
         } = self;
 
         let ptr = Box::into_raw(Box::new(inner));
         let ptr = WithMetadataOf::with_metadata_of_on_stable(ptr, read);
         let inner = unsafe { Box::from_raw(ptr) };
 
-        ReaderBox { inner, seek, buf }
+        ReaderBox { inner, vtable }
     }
 
     /// Set the V-Table for [`BufRead`].
@@ -143,7 +145,7 @@ impl<R> Reader<R> {
     where
         R: BufRead,
     {
-        self.buf = Some(lifetime_erase_trait_vtable!((&mut self.inner): '_ as BufRead));
+        self.vtable.buf = Some(lifetime_erase_trait_vtable!((&mut self.inner): '_ as BufRead));
     }
 
     /// Set the V-Table for [`Seek`].
@@ -153,7 +155,7 @@ impl<R> Reader<R> {
     where
         R: Seek,
     {
-        self.seek = Some(lifetime_erase_trait_vtable!((&mut self.inner): '_ as Seek));
+        self.vtable.seek = Some(lifetime_erase_trait_vtable!((&mut self.inner): '_ as Seek));
     }
 }
 
@@ -178,7 +180,7 @@ impl<R> Reader<R> {
     /// The value can be moved after such call arbitrarily.
     pub fn as_buf(&self) -> Option<&(dyn BufRead + '_)> {
         let ptr = &self.inner as *const R;
-        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.buf?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.buf?);
         Some(unsafe { &*local })
     }
 
@@ -188,7 +190,7 @@ impl<R> Reader<R> {
     /// The value can be moved after such call arbitrarily.
     pub fn as_buf_mut(&mut self) -> Option<&mut (dyn BufRead + '_)> {
         let ptr = &mut self.inner as *mut R;
-        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.buf?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.buf?);
         Some(unsafe { &mut *local })
     }
 
@@ -198,7 +200,7 @@ impl<R> Reader<R> {
     /// The value can be moved after such call arbitrarily.
     pub fn as_seek(&self) -> Option<&(dyn Seek + '_)> {
         let ptr = &self.inner as *const R;
-        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.seek?);
         Some(unsafe { &*local })
     }
 
@@ -208,7 +210,7 @@ impl<R> Reader<R> {
     /// The value can be moved after such call arbitrarily.
     pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
         let ptr = &mut self.inner as *mut R;
-        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.seek?);
         Some(unsafe { &mut *local })
     }
 
@@ -225,13 +227,13 @@ impl ReaderMut<'_> {
 
     pub fn as_buf_mut(&mut self) -> Option<&mut (dyn BufRead + '_)> {
         let ptr = self.inner as *mut dyn Read;
-        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.buf?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.buf?);
         Some(unsafe { &mut *local })
     }
 
     pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
         let ptr = self.inner as *mut dyn Read;
-        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.seek?);
         Some(unsafe { &mut *local })
     }
 }
@@ -239,8 +241,7 @@ impl ReaderMut<'_> {
 impl ReaderBox<'_> {
     pub fn as_mut(&mut self) -> ReaderMut<'_> {
         ReaderMut {
-            seek: self.seek,
-            buf: self.buf,
+            vtable: self.vtable,
             inner: self.as_read_mut(),
         }
     }
@@ -251,13 +252,13 @@ impl ReaderBox<'_> {
 
     pub fn as_buf_mut(&mut self) -> Option<&mut (dyn BufRead + '_)> {
         let ptr = self.inner.as_mut() as *mut _;
-        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.buf?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.buf?);
         Some(unsafe { &mut *local })
     }
 
     pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
         let ptr = self.inner.as_mut() as *mut _;
-        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.seek?);
         Some(unsafe { &mut *local })
     }
 }
