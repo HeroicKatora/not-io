@@ -1,5 +1,9 @@
 use crate::stable_with_metadata_of::WithMetadataOf;
-use std::io::{Seek, Write};
+
+use std::{
+    any::Any,
+    io::{Seek, Write},
+};
 
 /// A writer, which can dynamically provide IO traits.
 ///
@@ -47,7 +51,13 @@ use std::io::{Seek, Write};
 pub struct Writer<W> {
     inner: W,
     write: *mut dyn Write,
+    vtable: OptTable,
+}
+
+#[derive(Clone, Copy)]
+struct OptTable {
     seek: Option<*mut dyn Seek>,
+    any: Option<*mut dyn Any>,
 }
 
 /// A mutable reference to a [`Writer`].
@@ -62,13 +72,13 @@ pub struct Writer<W> {
 /// Use it for owning a writer without its specific type similar to `Box<dyn Read>`.
 pub struct WriterMut<'lt> {
     inner: &'lt mut dyn Write,
-    seek: Option<*mut dyn Seek>,
+    vtable: OptTable,
 }
 
 /// A box around a type-erased [`Writer`].
 pub struct WriterBox<'lt> {
     inner: Box<dyn Write + 'lt>,
-    seek: Option<*mut dyn Seek>,
+    vtable: OptTable,
 }
 
 impl<W: Write> Writer<W> {
@@ -79,7 +89,10 @@ impl<W: Write> Writer<W> {
         Writer {
             inner: writer,
             write,
-            seek: None,
+            vtable: OptTable {
+                seek: None,
+                any: None,
+            },
         }
     }
 }
@@ -106,12 +119,12 @@ impl<W> Writer<W> {
         let Writer {
             inner: _,
             write: _,
-            seek,
+            vtable,
         } = *self;
 
         WriterMut {
             inner: self.as_write_mut(),
-            seek,
+            vtable,
         }
     }
 
@@ -124,13 +137,17 @@ impl<W> Writer<W> {
     where
         W: 'lt,
     {
-        let Writer { inner, write, seek } = self;
+        let Writer {
+            inner,
+            write,
+            vtable,
+        } = self;
 
         let ptr = Box::into_raw(Box::new(inner));
         let ptr = WithMetadataOf::with_metadata_of_on_stable(ptr, write);
         let inner = unsafe { Box::from_raw(ptr) };
 
-        WriterBox { inner, seek }
+        WriterBox { inner, vtable }
     }
 
     /// Set the V-Table of [`Seek`].
@@ -140,7 +157,17 @@ impl<W> Writer<W> {
     where
         W: Seek,
     {
-        self.seek = Some(lifetime_erase_trait_vtable!((&mut self.inner): '_ as Seek));
+        self.vtable.seek = Some(lifetime_erase_trait_vtable!((&mut self.inner): '_ as Seek));
+    }
+
+    /// Set the V-Table for [`Any`].
+    ///
+    /// After this call, the methods [`Self::as_any`] and [`Self::as_any_mut`] will return values.
+    pub fn set_any(&mut self)
+    where
+        W: Any,
+    {
+        self.vtable.any = Some(lifetime_erase_trait_vtable!((&mut self.inner): '_ as Any));
     }
 }
 
@@ -165,7 +192,7 @@ impl<W> Writer<W> {
     /// The value can be moved after such call arbitrarily.
     pub fn as_seek(&self) -> Option<&(dyn Seek + '_)> {
         let ptr = &self.inner as *const W;
-        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.seek?);
         Some(unsafe { &*local })
     }
 
@@ -175,7 +202,21 @@ impl<W> Writer<W> {
     /// The value can be moved after such call arbitrarily.
     pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
         let ptr = &mut self.inner as *mut W;
-        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.seek?);
+        Some(unsafe { &mut *local })
+    }
+
+    /// Get the inner value as a dynamic `Any` reference.
+    pub fn as_any(&self) -> Option<&(dyn Any + '_)> {
+        let ptr = &self.inner as *const W;
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
+        Some(unsafe { &*local })
+    }
+
+    /// Get the inner value as a dynamic `Any` reference.
+    pub fn as_any_mut(&mut self) -> Option<&mut (dyn Any + '_)> {
+        let ptr = &mut self.inner as *mut W;
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
         Some(unsafe { &mut *local })
     }
 
@@ -192,7 +233,21 @@ impl WriterMut<'_> {
 
     pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
         let ptr = self.inner as *mut dyn Write;
-        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.seek?);
+        Some(unsafe { &mut *local })
+    }
+
+    /// Get the inner value as a dynamic `Any` reference.
+    pub fn as_any(&self) -> Option<&(dyn Any + '_)> {
+        let ptr = self.inner as *const dyn Write;
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
+        Some(unsafe { &*local })
+    }
+
+    /// Get the inner value as a dynamic `Any` reference.
+    pub fn as_any_mut(&mut self) -> Option<&mut (dyn Any + '_)> {
+        let ptr = self.inner as *mut dyn Write;
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
         Some(unsafe { &mut *local })
     }
 }
@@ -200,7 +255,7 @@ impl WriterMut<'_> {
 impl WriterBox<'_> {
     pub fn as_mut(&mut self) -> WriterMut<'_> {
         WriterMut {
-            seek: self.seek,
+            vtable: self.vtable,
             inner: self.as_read_mut(),
         }
     }
@@ -211,7 +266,21 @@ impl WriterBox<'_> {
 
     pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
         let ptr = self.inner.as_mut() as *mut _;
-        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.seek?);
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.seek?);
+        Some(unsafe { &mut *local })
+    }
+
+    /// Get the inner value as a dynamic `Any` reference.
+    pub fn as_any(&self) -> Option<&(dyn Any + '_)> {
+        let ptr = self.inner.as_ref() as *const _;
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
+        Some(unsafe { &*local })
+    }
+
+    /// Get the inner value as a dynamic `Any` reference.
+    pub fn as_any_mut(&mut self) -> Option<&mut (dyn Any + '_)> {
+        let ptr = self.inner.as_mut() as *mut _;
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
         Some(unsafe { &mut *local })
     }
 }
