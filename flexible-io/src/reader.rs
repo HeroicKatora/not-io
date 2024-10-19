@@ -1,5 +1,9 @@
 use crate::stable_with_metadata_of::WithMetadataOf;
-use std::io::{BufRead, Read, Seek};
+
+use std::{
+    any::Any,
+    io::{BufRead, Read, Seek},
+};
 
 /// A reader, which can dynamically provide IO traits.
 ///
@@ -7,6 +11,7 @@ use std::io::{BufRead, Read, Seek};
 ///
 /// * [`Seek`]
 /// * [`BufRead`]
+/// * [`Any`]
 ///
 /// The struct comes with a number of setter methods. The call to these requires proof to the
 /// compiler that the bound is met, inserting the vtable from the impl instance. Afterward, the
@@ -46,6 +51,7 @@ pub struct Reader<R> {
 struct OptTable {
     seek: Option<*mut dyn Seek>,
     buf: Option<*mut dyn BufRead>,
+    any: Option<*mut dyn Any>,
 }
 
 /// A mutable reference to a [`Reader`].
@@ -80,6 +86,7 @@ impl<R: Read> Reader<R> {
             vtable: OptTable {
                 seek: None,
                 buf: None,
+                any: None,
             },
         }
     }
@@ -157,6 +164,16 @@ impl<R> Reader<R> {
     {
         self.vtable.seek = Some(lifetime_erase_trait_vtable!((&mut self.inner): '_ as Seek));
     }
+
+    /// Set the V-Table for [`Any`].
+    ///
+    /// After this call, the methods [`Self::as_any`] and [`Self::as_any_mut`] will return values.
+    pub fn set_any(&mut self)
+    where
+        R: Any,
+    {
+        self.vtable.any = Some(lifetime_erase_trait_vtable!((&mut self.inner): '_ as Any));
+    }
 }
 
 impl<R> Reader<R> {
@@ -214,6 +231,20 @@ impl<R> Reader<R> {
         Some(unsafe { &mut *local })
     }
 
+    /// Get the inner value as a dynamic `Any` reference.
+    pub fn as_any(&self) -> Option<&(dyn Any + '_)> {
+        let ptr = &self.inner as *const R;
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
+        Some(unsafe { &*local })
+    }
+
+    /// Get the inner value as a dynamic `Any` reference.
+    pub fn as_any_mut(&mut self) -> Option<&mut (dyn Any + '_)> {
+        let ptr = &mut self.inner as *mut R;
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
+        Some(unsafe { &mut *local })
+    }
+
     /// Unwrap the inner value at its original sized type.
     pub fn into_inner(self) -> R {
         self.inner
@@ -234,6 +265,20 @@ impl ReaderMut<'_> {
     pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
         let ptr = self.inner as *mut dyn Read;
         let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.seek?);
+        Some(unsafe { &mut *local })
+    }
+
+    /// Get the inner value as a dynamic `Any` reference.
+    pub fn as_any(&self) -> Option<&(dyn Any + '_)> {
+        let ptr = self.inner as *const dyn Read;
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
+        Some(unsafe { &*local })
+    }
+
+    /// Get the inner value as a dynamic `Any` reference.
+    pub fn as_any_mut(&mut self) -> Option<&mut (dyn Any + '_)> {
+        let ptr = self.inner as *mut dyn Read;
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
         Some(unsafe { &mut *local })
     }
 }
@@ -259,6 +304,20 @@ impl ReaderBox<'_> {
     pub fn as_seek_mut(&mut self) -> Option<&mut (dyn Seek + '_)> {
         let ptr = self.inner.as_mut() as *mut _;
         let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.seek?);
+        Some(unsafe { &mut *local })
+    }
+
+    /// Get the inner value as a dynamic `Any` reference.
+    pub fn as_any(&self) -> Option<&(dyn Any + '_)> {
+        let ptr = self.inner.as_ref() as *const _;
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
+        Some(unsafe { &*local })
+    }
+
+    /// Get the inner value as a dynamic `Any` reference.
+    pub fn as_any_mut(&mut self) -> Option<&mut (dyn Any + '_)> {
+        let ptr = self.inner.as_mut() as *mut _;
+        let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
         Some(unsafe { &mut *local })
     }
 }
