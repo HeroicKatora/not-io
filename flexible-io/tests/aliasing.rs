@@ -51,3 +51,55 @@ fn writer_reuses() {
 
     write.into_inner();
 }
+
+#[test]
+fn writer_any() {
+    let data: Vec<u8> = b"Hello, world!".to_vec();
+    let mut write = Writer::new(std::io::Cursor::new(data));
+
+    {
+        let mut inner = write.as_mut();
+        assert!(inner.as_any().is_none());
+        assert!(inner.as_any_mut().is_none());
+    }
+
+    write.set_any();
+
+    {
+        let mut inner = write.as_mut();
+        assert!(inner.as_any().is_some());
+        assert!(inner.as_any_mut().is_some());
+
+        type Inner = std::io::Cursor<Vec<u8>>;
+        assert!(inner
+            .as_any()
+            .and_then(|v| v.downcast_ref::<Inner>())
+            .is_some());
+    }
+}
+
+#[test]
+fn reader_any() {
+    let data: Vec<u8> = b"Hello, world!".to_vec();
+    let mut write = Reader::new(std::io::Cursor::new(data));
+
+    {
+        let mut inner = write.as_mut();
+        assert!(inner.as_any().is_none());
+        assert!(inner.as_any_mut().is_none());
+    }
+
+    write.set_any();
+
+    {
+        let mut inner = write.as_mut();
+        assert!(inner.as_any().is_some());
+        assert!(inner.as_any_mut().is_some());
+
+        type Inner = std::io::Cursor<Vec<u8>>;
+        assert!(inner
+            .as_any()
+            .and_then(|v| v.downcast_ref::<Inner>())
+            .is_some());
+    }
+}

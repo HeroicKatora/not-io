@@ -207,14 +207,14 @@ impl<W> Writer<W> {
     }
 
     /// Get the inner value as a dynamic `Any` reference.
-    pub fn as_any(&self) -> Option<&(dyn Any + '_)> {
+    pub fn as_any(&self) -> Option<&'_ dyn Any> {
         let ptr = &self.inner as *const W;
         let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
         Some(unsafe { &*local })
     }
 
     /// Get the inner value as a dynamic `Any` reference.
-    pub fn as_any_mut(&mut self) -> Option<&mut (dyn Any + '_)> {
+    pub fn as_any_mut(&mut self) -> Option<&'_ mut dyn Any> {
         let ptr = &mut self.inner as *mut W;
         let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
         Some(unsafe { &mut *local })
@@ -238,14 +238,14 @@ impl WriterMut<'_> {
     }
 
     /// Get the inner value as a dynamic `Any` reference.
-    pub fn as_any(&self) -> Option<&(dyn Any + '_)> {
+    pub fn as_any(&self) -> Option<&'_ dyn Any> {
         let ptr = self.inner as *const dyn Write;
         let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
         Some(unsafe { &*local })
     }
 
     /// Get the inner value as a dynamic `Any` reference.
-    pub fn as_any_mut(&mut self) -> Option<&mut (dyn Any + '_)> {
+    pub fn as_any_mut(&mut self) -> Option<&'_ mut dyn Any> {
         let ptr = self.inner as *mut dyn Write;
         let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
         Some(unsafe { &mut *local })
@@ -271,14 +271,14 @@ impl WriterBox<'_> {
     }
 
     /// Get the inner value as a dynamic `Any` reference.
-    pub fn as_any(&self) -> Option<&(dyn Any + '_)> {
+    pub fn as_any(&self) -> Option<&'_ dyn Any> {
         let ptr = self.inner.as_ref() as *const _;
         let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
         Some(unsafe { &*local })
     }
 
     /// Get the inner value as a dynamic `Any` reference.
-    pub fn as_any_mut(&mut self) -> Option<&mut (dyn Any + '_)> {
+    pub fn as_any_mut(&mut self) -> Option<&'_ mut dyn Any> {
         let ptr = self.inner.as_mut() as *mut _;
         let local = WithMetadataOf::with_metadata_of_on_stable(ptr, self.vtable.any?);
         Some(unsafe { &mut *local })
